@@ -1,0 +1,12 @@
+﻿@page "/not-found"
+@layout MainLayout
+@inject NavigationManager Navigation
+
+<PageTitle>Not Found</PageTitle>
+
+<RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center" Style="height: 50vh;">
+    <RadzenIcon Icon="error_outline" Style="font-size: 6rem; color: var(--rz-base-400);" />
+    <RadzenText TextStyle="TextStyle.H3">404 - Page Not Found</RadzenText>
+    <RadzenText TextStyle="TextStyle.Body1">The page you are looking for does not exist.</RadzenText>
+    <RadzenButton Text="Go to Dashboard" Icon="home" Click="@(() => Navigation.NavigateTo("/"))" ButtonStyle="ButtonStyle.Primary" />
+</RadzenStack>

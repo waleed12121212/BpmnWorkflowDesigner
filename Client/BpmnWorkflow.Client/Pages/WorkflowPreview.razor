@@ -1,0 +1,190 @@
+@page "/workflow-preview/{WorkflowId:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using BpmnWorkflow.Client.Models
+@attribute [Authorize]
+@inject Services.IWorkflowService WorkflowService
+@inject Services.IBpmnInteropService BpmnInterop
+@inject Radzen.NotificationService NotificationService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Workflow Preview</PageTitle>
+
+<RadzenStack Gap="1rem">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+        <RadzenButton Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Click="@GoBack" title="Back to list" />
+        <RadzenText TextStyle="TextStyle.H3" Style="margin-bottom: 0;">
+            Workflow Preview
+        </RadzenText>
+    </RadzenStack>
+
+    @if (_workflow != null)
+    {
+        <RadzenCard>
+            <RadzenStack Gap="0.5rem">
+                <RadzenText TextStyle="TextStyle.H5">@_workflow.Name</RadzenText>
+                @if (!string.IsNullOrEmpty(_workflow.Description))
+                {
+                    <RadzenText>@_workflow.Description</RadzenText>
+                }
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="1rem">
+                    <RadzenText><strong>Owner:</strong> @_workflow.OwnerName</RadzenText>
+                    <RadzenText><strong>Updated:</strong> @_workflow.UpdatedAt.ToString("g")</RadzenText>
+                    <RadzenText><strong>Status:</strong> @(_workflow.IsPublished ? "Published" : "Draft")</RadzenText>
+                </RadzenStack>
+            </RadzenStack>
+        </RadzenCard>
+
+        <RadzenCard Style="height:700px; overflow:hidden;">
+            <RadzenStack Gap="0.5rem" Style="height:100%;">
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" AlignItems="AlignItems.Center" Style="padding:0.5rem; background:#f5f5f5; border-radius:4px;">
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin-right:0.5rem;">Zoom:</RadzenText>
+                    <RadzenButton Icon="zoom_in" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ZoomIn" title="Zoom In" />
+                    <RadzenButton Icon="zoom_out" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ZoomOut" title="Zoom Out" />
+                    <RadzenButton Icon="fit_screen" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@FitToViewport" title="Fit to Viewport" />
+                    <RadzenButton Icon="aspect_ratio" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ActualSize" title="Actual Size (100%)" />
+                </RadzenStack>
+                <div id="@_containerId" class="bpmn-editor-container" style="width:100%; height:calc(100% - 50px); border:1px solid #e0e0e0; overflow:auto; position:relative; background:#fafafa;"></div>
+            </RadzenStack>
+        </RadzenCard>
+
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+            <RadzenButton Icon="edit" Text="Edit Workflow" ButtonStyle="ButtonStyle.Primary" 
+                          Click="@(() => NavigationManager.NavigateTo($"/workflow-editor/{WorkflowId}"))" />
+            <RadzenButton Icon="arrow_back" Text="Back to List" ButtonStyle="ButtonStyle.Light" 
+                          Click="@GoBack" />
+        </RadzenStack>
+    }
+    else if (_loading)
+    {
+        <RadzenCard>
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" Style="padding:2rem;">
+                <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                <RadzenText>Loading workflow...</RadzenText>
+            </RadzenStack>
+        </RadzenCard>
+    }
+    else
+    {
+        <RadzenCard>
+            <RadzenText Style="color: red;">Workflow not found!</RadzenText>
+        </RadzenCard>
+    }
+</RadzenStack>
+
+@code {
+    [Parameter] public Guid WorkflowId { get; set; }
+    
+    private readonly string _containerId = $"bpmn-preview-{Guid.NewGuid()}";
+    private WorkflowDto? _workflow;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Console.WriteLine($"Loading workflow preview for ID: {WorkflowId}");
+            _workflow = await WorkflowService.GetByIdAsync(WorkflowId);
+            
+            if (_workflow != null)
+            {
+                Console.WriteLine($"Workflow loaded: {_workflow.Name}");
+            }
+            else
+            {
+                Console.WriteLine("Workflow not found");
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Workflow not found");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading workflow: {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to load workflow: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool _isInitialized = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Try to initialize whenever the workflow is present but not yet initialized
+        // This handles both the case where data loads fast (before first render) and slow (after first render)
+        if (_workflow != null && !_isInitialized)
+        {
+            try
+            {
+                // Give the UI a moment to render the container div
+                await Task.Delay(50);
+                
+                Console.WriteLine($"Initializing BPMN viewer for preview: {_containerId}");
+                await BpmnInterop.InitializeAsync(_containerId);
+                _isInitialized = true;
+                
+                if (!string.IsNullOrEmpty(_workflow.BpmnXml))
+                {
+                    Console.WriteLine($"Loading BPMN diagram, XML length: {_workflow.BpmnXml.Length}");
+                    var success = await BpmnInterop.ImportXmlAsync(_workflow.BpmnXml);
+                    
+                    if (success)
+                    {
+                        Console.WriteLine("Diagram loaded successfully in preview mode");
+                        await Task.Delay(100);
+                        await BpmnInterop.ResetZoomAsync();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to load diagram in preview mode");
+                        NotificationService.Notify(NotificationSeverity.Warning, "Warning", "Could not display workflow diagram");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("No BPMN XML available for preview");
+                    NotificationService.Notify(NotificationSeverity.Info, "Info", "This workflow has no diagram to preview");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing preview: {ex.Message}");
+                // Only mark initialized if it wasn't a "container not found" error which might happen if render is too fast
+                if (!ex.Message.Contains("container")) 
+                {
+                    _isInitialized = true; // Stop trying if it's a fatal error
+                    NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to display diagram: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/workflows");
+    }
+
+    private async Task ZoomIn()
+    {
+        await BpmnInterop.ZoomInAsync();
+    }
+
+    private async Task ZoomOut()
+    {
+        await BpmnInterop.ZoomOutAsync();
+    }
+
+    private async Task FitToViewport()
+    {
+        await BpmnInterop.ResetZoomAsync();
+    }
+
+    private async Task ActualSize()
+    {
+        await BpmnInterop.ZoomToActualAsync();
+    }
+}

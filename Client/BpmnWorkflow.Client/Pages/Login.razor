@@ -1,0 +1,86 @@
+@page "/login"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+
+<PageTitle>Login - BPMN Designer</PageTitle>
+
+<RadzenRow JustifyContent="JustifyContent.Center" AlignItems="AlignItems.Center" Style="min-height: 80vh;">
+    <RadzenColumn Size="12" SizeMD="4">
+        <RadzenCard Variant="Variant.Flat" Style="padding: 2rem;">
+            <RadzenStack Gap="1.5rem">
+                <RadzenStack AlignItems="AlignItems.Center">
+                    <RadzenIcon Icon="account_circle" Style="font-size: 4rem; color: var(--rz-primary);" />
+                    <RadzenText TextStyle="TextStyle.H4">Welcome Back</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Subtitle2">Sign in to manage your workflows</RadzenText>
+                </RadzenStack>
+
+                <RadzenStack Gap="1rem">
+                    <RadzenFormField Text="Username" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_loginRequest.Username" Style="width: 100%;" @onkeypress="@HandleKeyPress" />
+                    </RadzenFormField>
+
+                    <RadzenFormField Text="Password" Variant="Variant.Outlined">
+                        <RadzenPassword @bind-Value="_loginRequest.Password" Style="width: 100%;" @onkeypress="@HandleKeyPress" />
+                    </RadzenFormField>
+
+                    <RadzenButton Text="Login" Icon="login" Click="@OnLogin" IsBusy="@_isBusy" 
+                                  ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Large" Style="width: 100%; margin-top: 1rem;" />
+
+                    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Center" Gap="0.5rem">
+                        <RadzenText TextStyle="TextStyle.Body2">Don't have an account?</RadzenText>
+                            <RadzenLink Path="/register" Text="Create one" />
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+</RadzenRow>
+
+@code {
+    private LoginRequest _loginRequest = new();
+    private bool _isBusy;
+
+    private async Task OnLogin()
+    {
+        if (string.IsNullOrWhiteSpace(_loginRequest.Username) || string.IsNullOrWhiteSpace(_loginRequest.Password))
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Validation", "Please enter username and password");
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var result = await AuthService.LoginAsync(_loginRequest);
+            if (result.Success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Login Successful", $"Welcome back, {result.Username}!");
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Login Failed", result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "An unexpected error occurred during login");
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await OnLogin();
+        }
+    }
+}

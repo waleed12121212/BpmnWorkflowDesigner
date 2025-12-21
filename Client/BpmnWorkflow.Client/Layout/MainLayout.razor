@@ -1,0 +1,82 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject Services.IAuthService AuthService
+@inject Radzen.DialogService DialogService
+@inject Radzen.NotificationService NotificationService
+
+@inject Services.ThemeService ThemeService
+
+<RadzenDialog />
+<RadzenNotification />
+<RadzenTooltip />
+<RadzenContextMenu />
+
+<RadzenLayout Style="height: 100vh">
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0">
+            <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" />
+            <RadzenLabel Text="BPMN Designer" Style="margin-left: 1rem; font-size: 1.5rem; font-weight: 500; color: white;" />
+            
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" Style="margin-left: auto; margin-right: 1rem;">
+                <RadzenButton Icon="@(_isDarkMode ? "light_mode" : "dark_mode")" ButtonStyle="ButtonStyle.Base" 
+                              Click="@ToggleTheme" Style="margin-right: 0.5rem;" title="@(_isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode")" />
+                
+                <AuthorizeView>
+                    <Authorized>
+                        <RadzenProfileMenu>
+                            <Template>
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                                    <RadzenText TextStyle="TextStyle.Body2" Style="color: white; margin-bottom: 0;">@context.User.Identity?.Name</RadzenText>
+                                    <RadzenIcon Icon="account_circle" Style="font-size: 2rem; color: white;" />
+                                </RadzenStack>
+                            </Template>
+                            <ChildContent>
+                                <RadzenProfileMenuItem Text="Logout" Icon="logout" Click="@(() => Logout())" />
+                            </ChildContent>
+                        </RadzenProfileMenu>
+                    </Authorized>
+                    <NotAuthorized>
+                        <RadzenButton Text="Login" Icon="login" ButtonStyle="ButtonStyle.Info" Click="@(() => Navigation.NavigateTo("/login"))" />
+                    </NotAuthorized>
+                </AuthorizeView>
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenHeader>
+    <RadzenSidebar @bind-Expanded="@sidebarExpanded">
+        <RadzenPanelMenu>
+            <RadzenPanelMenuItem Text="Dashboard" Icon="dashboard" Path="/" Match="NavLinkMatch.All" />
+            <RadzenPanelMenuItem Text="Workflows" Icon="account_tree" Path="workflows" />
+            <RadzenPanelMenuItem Text="New Workflow" Icon="add_circle" Path="workflow-editor" />
+            <RadzenPanelMenuItem Text="Form Designer" Icon="description" Path="forms" />
+            <RadzenPanelMenuItem Text="DMN Decisions" Icon="table_chart" Path="dmn-decisions" />
+            <RadzenPanelMenuItem Text="Analytics" Icon="analytics" Path="analytics" />
+        </RadzenPanelMenu>
+    </RadzenSidebar>
+    <RadzenBody>
+        <div class="rz-p-4">
+            @Body
+        </div>
+    </RadzenBody>
+</RadzenLayout>
+
+@code {
+    bool sidebarExpanded = true;
+    bool _isDarkMode = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isDarkMode = await ThemeService.IsDarkModeAsync();
+    }
+
+    async Task ToggleTheme()
+    {
+        await ThemeService.ToggleThemeAsync();
+        _isDarkMode = !_isDarkMode;
+    }
+
+    async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+}

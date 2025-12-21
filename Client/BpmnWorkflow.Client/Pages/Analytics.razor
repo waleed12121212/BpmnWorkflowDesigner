@@ -1,0 +1,98 @@
+@page "/analytics"
+@using Microsoft.AspNetCore.Authorization
+@using BpmnWorkflow.Client.Models
+@attribute [Authorize]
+@inject BpmnWorkflow.Client.Services.IAnalyticsService AnalyticsService
+@inject Radzen.DialogService DialogService
+@inject Radzen.NotificationService NotificationService
+
+<PageTitle>Analytics Dashboard</PageTitle>
+
+<RadzenStack Gap="1.5rem">
+    <RadzenText TextStyle="TextStyle.H3">Analytics Dashboard</RadzenText>
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else if (_analytics == null)
+    {
+        <RadzenAlert Severity="Severity.Error">Could not load analytics data.</RadzenAlert>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-4">
+                <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Workflows</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalWorkflows</RadzenText>
+                </RadzenCard>
+            </div>
+            <div class="col-md-4">
+                <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Users</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalUsers</RadzenText>
+                </RadzenCard>
+            </div>
+            <div class="col-md-4">
+                <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Comments</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalComments</RadzenText>
+                </RadzenCard>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-8">
+                <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H5">New Workflows (Last 7 Days)</RadzenText>
+                    <RadzenChart style="height: 350px">
+                        <RadzenAreaSeries Smooth="true" Data="@_analytics.WorkflowsCreatedTrend" CategoryProperty="Date" Title="Created" ValueProperty="Count" RenderingOrder="1">
+                            <RadzenSeriesDataLabels Visible="false" />
+                        </RadzenAreaSeries>
+                        <RadzenCategoryAxis Padding="20" />
+                        <RadzenValueAxis Min="0" Step="1">
+                            <RadzenGridLines Visible="true" />
+                            <RadzenAxisTitle Text="Count" />
+                        </RadzenValueAxis>
+                    </RadzenChart>
+                </RadzenCard>
+            </div>
+            <div class="col-md-4">
+                 <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H5">Top Contributors</RadzenText>
+                    <RadzenChart style="height: 350px">
+                        <RadzenBarSeries Data="@_analytics.TopContributors" CategoryProperty="UserName" Title="Workflows" ValueProperty="Count">
+                            <RadzenSeriesDataLabels Visible="true" />
+                        </RadzenBarSeries>
+                        <RadzenValueAxis Min="0" Step="1">
+                             <RadzenGridLines Visible="true" />
+                        </RadzenValueAxis>
+                    </RadzenChart>
+                </RadzenCard>
+            </div>
+        </div>
+    }
+</RadzenStack>
+
+@code {
+    private DashboardAnalyticsDto? _analytics;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _analytics = await AnalyticsService.GetDashboardAnalyticsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Analytics error: {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to load dashboard data");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

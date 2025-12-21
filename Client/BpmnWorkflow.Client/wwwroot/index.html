@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BpmnWorkflow.Client</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" id="theme-style" href="_content/Radzen.Blazor/css/material-base.css" />
+    <link rel="stylesheet" href="https://unpkg.com/diagram-js/assets/diagram-js.css" />
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js/dist/assets/diagram-js.css" />
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js/dist/assets/bpmn-js.css" />
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js/dist/assets/bpmn-font/css/bpmn.css" />
+    <link rel="stylesheet" href="https://unpkg.com/diagram-js-minimap/assets/diagram-js-minimap.css" />
+    <link rel="stylesheet" href="https://unpkg.com/@bpmn-io/form-js/dist/assets/form-js.css">
+    <link rel="stylesheet" href="https://unpkg.com/@bpmn-io/form-js/dist/assets/form-js-editor.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/diagram-js.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/dmn-js-decision-table.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/dmn-js-drd.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/dmn-js-literal-expression.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/dmn-js-shared.css">
+    <link rel="stylesheet" href="https://unpkg.com/dmn-js/dist/assets/dmn-font/css/dmn.css">
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="BpmnWorkflow.Client.styles.css" rel="stylesheet" />
+    <style>
+        .sim-highlight:not(.djs-connection) .djs-visual> :nth-child(1) {
+            stroke: #4facfe !important;
+            stroke-width: 4px !important;
+            fill: rgba(79, 172, 254, 0.1) !important;
+        }
+
+        .sim-overlay-content {
+            animation: pulse-sim 2s infinite;
+            box-shadow: 0 0 10px rgba(79, 172, 254, 0.5);
+        }
+
+        @keyframes pulse-sim {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Linting Styles */
+        .lint-badge {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            cursor: help;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .lint-badge-warning {
+            background: #ff9800;
+        }
+
+        .lint-badge-error {
+            background: #f44336;
+        }
+
+        .lint-warning .djs-visual> :nth-child(1) {
+            stroke: #ff9800 !important;
+            stroke-dasharray: 5, 5;
+        }
+
+        .lint-error .djs-visual> :nth-child(1) {
+            stroke: #f44336 !important;
+            stroke-width: 3px !important;
+        }
+
+        /* Diff Styles */
+        .diff-added .djs-visual> :nth-child(1) {
+            stroke: #4caf50 !important;
+            stroke-width: 4px !important;
+        }
+
+        .diff-modified .djs-visual> :nth-child(1) {
+            stroke: #ff9800 !important;
+            stroke-width: 4px !important;
+        }
+    </style>
+    <script>
+        // Apply saved theme immediately to prevent flash
+        (function () {
+            var theme = localStorage.getItem('theme') || 'light';
+            var link = document.getElementById('theme-style');
+            if (theme === 'dark') {
+                link.href = '_content/Radzen.Blazor/css/material-dark.css';
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/canvg/3.0.10/umd.min.js"></script>
+    <script src="lib/bpmn-js/bpmn-modeler.development.js"></script>
+    <script src="https://unpkg.com/bpmn-js-minimap/dist/bpmn-js-minimap.umd.js"></script>
+    <script src="https://unpkg.com/@bpmn-io/form-js/dist/form-editor.umd.js"></script>
+    <script src="https://unpkg.com/@bpmn-io/form-js/dist/form-viewer.umd.js"></script>
+    <script src="https://unpkg.com/dmn-js/dist/dmn-modeler.development.js"></script>
+    <script src="js/bpmn-modeler.js"></script>
+    <script src="js/form-builder.js"></script>
+    <script src="js/dmn-modeler.js"></script>
+    <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

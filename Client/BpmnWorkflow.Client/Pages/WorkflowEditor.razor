@@ -1,0 +1,1318 @@
+@page "/workflow-editor"
+@page "/workflow-editor/{WorkflowId:guid}"
+@using BpmnWorkflow.Client.Services
+@using BpmnWorkflow.Client.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using Blazored.LocalStorage
+@attribute [Authorize]
+@inject IWorkflowService WorkflowService
+@inject IBpmnInteropService BpmnInterop
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+@inject NavigationManager NavigationManager
+@inject ILocalStorageService LocalStorage
+@inject IJSRuntime JsRuntime
+@inject ICommentService CommentService
+@inject IFormService FormService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject BpmnWorkflow.Client.Services.PowerPointExportService PowerPointService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@implements IAsyncDisposable
+
+<PageTitle>BPMN Editor</PageTitle>
+
+<RadzenStack Gap="1rem">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+        <RadzenButton Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Click="@GoBack" title="Back to list" />
+        <RadzenText TextStyle="TextStyle.H3" Style="margin-bottom: 0;">
+            @(WorkflowId.HasValue ? "Edit Workflow" : "New Workflow")
+        </RadzenText>
+        @if (WorkflowId.HasValue && _activeUsers.Any())
+        {
+            <RadzenBadge BadgeStyle="BadgeStyle.Success" IsPill="true" Text="@($"{_activeUsers.Count} Online: {string.Join(", ", _activeUsers)}")" Style="margin-left: 1rem;" />
+        }
+        @if (!string.IsNullOrEmpty(_hubUrl))
+        {
+            <RadzenText TextStyle="TextStyle.Caption" Style="margin-left: auto; color: #aaa; font-size: 0.7rem;">Hub: @_hubUrl</RadzenText>
+        }
+    </RadzenStack>
+
+    <RadzenCard>
+        <RadzenTextBox @bind-Value="_name" Placeholder="Workflow name" Style="width:100%;" />
+    </RadzenCard>
+
+    <RadzenCard Style="height:700px; overflow:hidden;">
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="1rem" Style="height:100%;"> 
+            <!-- Editor Column -->
+            <RadzenStack Gap="0.5rem" Style="flex: 1; height:100%;">
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" Style="padding:0.5rem; background:#f5f5f5; border-radius:4px;">
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin-right:0.5rem;">Zoom:</RadzenText>
+                    <RadzenButton Icon="zoom_in" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ZoomIn" title="Zoom In" />
+                    <RadzenButton Icon="zoom_out" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ZoomOut" title="Zoom Out" />
+                    <RadzenButton Icon="fit_screen" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@FitToViewport" title="Fit to Viewport" />
+                    <RadzenButton Icon="aspect_ratio" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ActualSize" title="Actual Size (100%)" />
+                    
+                    <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin-right:0.5rem;">Edit:</RadzenText>
+                    <RadzenButton Icon="undo" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@Undo" title="Undo (Ctrl+Z)" />
+                    <RadzenButton Icon="redo" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@Redo" title="Redo (Ctrl+Y)" />
+
+                    <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+
+                    <RadzenButton Icon="history" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                   Click="@ShowVersionHistory" title="Version History" Text="Versions" />
+
+                    <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin-right:0.5rem;">Export:</RadzenText>
+                    <RadzenButton Icon="download" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Success" 
+                                  Click="@DownloadBPMN" title="Download BPMN File" Text="BPMN" />
+                    <RadzenButton Icon="image" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Info" 
+                                   Click="@DownloadSVG" title="Download SVG" Text="SVG" />
+                    <RadzenButton Icon="photo" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Info" 
+                                   Click="@DownloadPNG" title="Download PNG" Text="PNG" />
+                    <RadzenButton Icon="picture_as_pdf" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" 
+                                   Click="@DownloadPDF" title="Download PDF" Text="PDF" />
+                    <RadzenButton Icon="description" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" 
+                                   Click="@DownloadWord" title="Download Word Documentation" Text="Word" />
+                    <RadzenButton Icon="slideshow" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Secondary" 
+                                   Click="@DownloadPowerPoint" title="Download PowerPoint Slide (PPTX)" Text="PPTX" />
+
+                    <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+
+                    @if (!_isSimulating)
+                    {
+                        <RadzenButton Icon="play_arrow" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" 
+                                       Click="@StartSimulation" title="Start Simulation" Text="Simulate" />
+                    }
+                    else
+                    {
+                        <RadzenButton Icon="stop" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" 
+                                       Click="@StopSimulation" title="Stop Simulation" Text="Stop" />
+                    }
+
+                    <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+
+                    <RadzenButton Icon="check_circle" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Warning" 
+                                  Click="@ValidateAsync" title="Validate Diagram" Text="Check Rules" />
+                    
+                    <RadzenButton Icon="help_outline" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@ShowKeyboardShortcuts" title="Keyboard Shortcuts" Text="Shortcuts" />
+
+                    <div style="flex: 1;"></div>
+                    
+                    <RadzenButton Icon="@(_isPropertiesVisible ? "last_page" : "first_page")" 
+                                  Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
+                                  Click="@(() => _isPropertiesVisible = !_isPropertiesVisible)" 
+                                  title="@(_isPropertiesVisible ? "Hide Properties" : "Show Properties")" />
+                </RadzenStack>
+                <div id="@_containerId" class="bpmn-editor-container" style="width:100%; height:calc(100% - 60px); border:1px solid #e0e0e0; overflow:auto; position:relative;">
+                    @if (_isLoading)
+                    {
+                        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.7); display:flex; align-items:center; justify-content:center; z-index:100;">
+                            <RadzenProgressBarCircular Mode="ProgressBarMode.Indeterminate" />
+                        </div>
+                    }
+
+                    @if (_isDiffMode)
+                    {
+                        <div style="position: absolute; top: 10px; right: 10px; background: white; padding: 10px; border-radius: 4px; border: 1px solid #ccc; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 200px;">
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+                                <RadzenText TextStyle="TextStyle.Subtitle2" Style="margin: 0; font-weight: bold;">Diff Mode</RadzenText>
+                                <RadzenButton Icon="close" Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Danger" Click="@ExitDiffMode" title="Exit Comparison" />
+                            </RadzenStack>
+                            <hr style="margin: 8px 0" />
+                            <RadzenStack Gap="4px">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="width: 12px; height: 12px; border: 3px solid #4caf50; border-radius: 2px;"></div>
+                                    <RadzenText TextStyle="TextStyle.Caption">Added</RadzenText>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="width: 12px; height: 12px; border: 3px solid #ff9800; border-radius: 2px;"></div>
+                                    <RadzenText TextStyle="TextStyle.Caption">Modified</RadzenText>
+                                </div>
+                            </RadzenStack>
+                        </div>
+                    }
+                </div>
+            </RadzenStack>
+
+            <!-- Properties Column -->
+            @if (_isPropertiesVisible)
+            {
+                <RadzenCard Style="width: 320px; padding: 1rem; border-left: 1px solid #eee; overflow: auto; transition: width 0.3s ease;">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+                        <RadzenText TextStyle="TextStyle.H6" Style="margin-bottom: 0;">Properties</RadzenText>
+                        <RadzenButton Icon="close" Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Light" Click="@(() => _isPropertiesVisible = false)" />
+                    </RadzenStack>
+                    <hr style="margin: 0.5rem 0 1rem 0;" />
+                    
+                    @if (_selectedElement != null)
+                    {
+                        <RadzenTabs RenderMode="TabRenderMode.Client" Style="margin-top: 1rem;">
+                            <Tabs>
+                                <RadzenTabsItem Text="General" Icon="settings">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Type</RadzenText>
+                                            <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@_selectedElement.Type.Replace("bpmn:", "")" />
+                                        </div>
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">ID</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Caption" Style="font-family: monospace; word-break: break-all;">@_selectedElement.Id</RadzenText>
+                                        </div>
+                                        <hr style="margin: 0.5rem 0;" />
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Name</RadzenText>
+                                            <RadzenTextBox Value="@_selectedElement.Name" Change="@(args => UpdateProperty("name", args))" Style="width:100%" />
+                                        </div>
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Description</RadzenText>
+                                            <RadzenTextArea Value="@_selectedElement.Documentation" Change="@(args => UpdateProperty("documentation", args))" Style="width:100%; height:80px;" />
+                                        </div>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="Style" Icon="palette">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Stroke Color</RadzenText>
+                                            <RadzenColorPicker Value="@_selectedElement.Color" Change="@(args => UpdateProperty("color", args))" Style="width:100%" />
+                                        </div>
+                                        <div>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Fill Color</RadzenText>
+                                            <RadzenColorPicker Value="@_selectedElement.BackgroundColor" Change="@(args => UpdateProperty("backgroundColor", args))" Style="width:100%" />
+                                        </div>
+                                        <RadzenButton Text="Reset Style" Click="@(() => ResetElementStyle())" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Style="width:100%" />
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                @if (_selectedElement.Type == "bpmn:SequenceFlow" || _selectedElement.Type.Contains("Gateway") || _selectedElement.Type.Contains("Task"))
+                                {
+                                    <RadzenTabsItem Text="Logic" Icon="account_tree">
+                                        <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                            @if (_selectedElement.Type == "bpmn:SequenceFlow")
+                                            {
+                                                <div>
+                                                    <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Condition Expression</RadzenText>
+                                                    <RadzenTextArea Value="@_selectedElement.Condition" Change="@(args => UpdateProperty("condition", args))" Style="width:100%; height:100px; font-family: monospace;" Placeholder="${ condition }" />
+                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #aaa;">Syntax: ${ variable == 'value' }</RadzenText>
+                                                </div>
+                                            }
+                                            else if (_selectedElement.Type == "bpmn:UserTask")
+                                            {
+                                                <div>
+                                                    <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Associated Form</RadzenText>
+                                                    <RadzenDropDown @bind-Value="@_selectedElement.FormId" Data="@_availableForms" TextProperty="Name" ValueProperty="Id" 
+                                                                    Style="width: 100%;" Placeholder="Select a form..." AllowClear="true"
+                                                                    Change="@(args => UpdateProperty("formId", args?.ToString()))" />
+                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #aaa; margin-top: 0.5rem; display: block;">
+                                                        Choose a form created in the Form Designer to use for this task.
+                                                    </RadzenText>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <RadzenAlert Severity="Severity.Info" AllowClose="false" Size="AlertSize.Small">
+                                                    Logic properties for @_selectedElement.Type are currently managed via their connections.
+                                                </RadzenAlert>
+                                            }
+                                        </RadzenStack>
+                                    </RadzenTabsItem>
+                                }
+
+                                <RadzenTabsItem Text="Collaboration" Icon="chat">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 300px; overflow-y: auto; padding-right: 0.5rem;">
+                                            @if (_isCommentsLoading)
+                                            {
+                                                <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                                            }
+                                            else if (!_comments.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No comments yet.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                foreach (var comment in _comments.Where(c => c.ElementId == null || c.ElementId == _selectedElement.Id))
+                                                {
+                                                    <div style="background: white; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                                                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #4facfe; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 0.8rem;">
+                                                                @comment.UserName.ToUpper().FirstOrDefault()
+                                                            </div>
+                                                            <div style="flex-grow: 1;">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="font-weight: bold; color: #444; margin: 0;">@comment.UserName</RadzenText>
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #888; font-size: 0.65rem;">@comment.CreatedAt.ToLocalTime().ToString("MMM dd, HH:mm")</RadzenText>
+                                                                </div>
+                                                                <RadzenText TextStyle="TextStyle.Body2" Style="margin-top: 0.25rem; color: #333; line-height: 1.4;">@comment.Text</RadzenText>
+                                                                
+                                                                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 0.5rem;">
+                                                                    <div>
+                                                                        @if (comment.ElementId != null)
+                                                                        {
+                                                                            <RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Element" Style="font-size: 0.6rem; padding: 0.2rem 0.4rem;" />
+                                                                        }
+                                                                    </div>
+                                                                    @if (comment.UserId == _currentUserId)
+                                                                    {
+                                                                        <RadzenButton Icon="delete" Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Danger"
+                                                                                      Variant="Variant.Text" Click="@(() => DeleteComment(comment.Id))" />
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                        <RadzenStack Gap="0.5rem">
+                                            <RadzenTextArea @bind-Value="@_newCommentText" Placeholder="Add a comment..." Style="width: 100%; height: 60px;" />
+                                            <RadzenButton Text="Post" Icon="send" Click="@AddComment" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small" Disabled="@(string.IsNullOrWhiteSpace(_newCommentText))" />
+                                        </RadzenStack>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="History" Icon="history">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+                                            @if (_isAuditLoading)
+                                            {
+                                                <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                                            }
+                                            else if (!_auditLogs.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No history available.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                foreach (var log in _auditLogs)
+                                                {
+                                                    var icon = log.Action switch
+                                                    {
+                                                        "Create" => "add_circle",
+                                                        "Update" => "edit",
+                                                        "Restore" => "settings_backup_restore",
+                                                        "Delete" => "delete",
+                                                        _ => "event_note"
+                                                    };
+                                                    var color = log.Action switch
+                                                    {
+                                                        "Create" => "#4caf50",
+                                                        "Update" => "#4facfe",
+                                                        "Restore" => "#ff9800",
+                                                        "Delete" => "#f44336",
+                                                        _ => "#aaa"
+                                                    };
+
+                                                    <div style="padding: 0.75rem 0.5rem; border-bottom: 1px solid #f5f5f5; position: relative;">
+                                                        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                                                            <div style="display: flex; flex-direction: column; align-items: center; width: 24px;">
+                                                                <RadzenIcon Icon="@icon" Style="@($"font-size: 1.2rem; color: {color};")" />
+                                                                <div style="width: 2px; flex-grow: 1; background: #f0f0f0; margin-top: 4px; min-height: 20px;"></div>
+                                                            </div>
+                                                            <div style="flex-grow: 1;">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="font-weight: bold; color: #333; margin: 0;">@log.UserName @log.Action</RadzenText>
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #999; font-size: 0.65rem;">@log.Timestamp.ToLocalTime().ToString("MMM dd, HH:mm")</RadzenText>
+                                                                </div>
+                                                                <RadzenText TextStyle="TextStyle.Body2" Style="margin-top: 4px; font-size: 0.75rem; line-height: 1.2; color: #666;">@log.Changes</RadzenText>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="Local" Icon="history_edu">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 400px; overflow-y: auto; padding-right: 0.25rem;">
+                                            @if (!_commandHistory.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No actions in this session.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                <RadzenStack Gap="4px">
+                                                    @foreach (var cmd in _commandHistory.AsEnumerable().Reverse())
+                                                    {
+                                                        <div style="@($"padding: 6px 8px; border-radius: 4px; border-left: 3px solid {(cmd.IsUndo ? "#eee" : "#4facfe")}; background: {(cmd.IsUndo ? "#fafafa" : "#fff")}; opacity: {(cmd.IsUndo ? "0.5" : "1")}; display:flex; align-items:center; gap:0.5rem; transition: all 0.2s;")">
+                                                            <RadzenIcon Icon="@(cmd.IsUndo ? "update" : "check_circle")" Style="font-size: 0.9rem; color: #aaa;" />
+                                                            <RadzenText TextStyle="TextStyle.Caption" Style="@($"flex-grow:1; margin:0; {(cmd.IsUndo ? "text-decoration: line-through; color: #999;" : "color: #444; font-weight: 500;")}")">@cmd.Label</RadzenText>
+                                                        </div>
+                                                    }
+                                                </RadzenStack>
+                                            }
+                                        </div>
+                                        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                                            <RadzenButton Icon="undo" Text="Undo" Size="ButtonSize.ExtraSmall" Click="@(() => BpmnInterop.UndoAsync())" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" style="flex: 1" />
+                                            <RadzenButton Icon="redo" Text="Redo" Size="ButtonSize.ExtraSmall" Click="@(() => BpmnInterop.RedoAsync())" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" style="flex: 1" />
+                                        </RadzenStack>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                            </Tabs>
+                        </RadzenTabs>
+                    }
+                    else
+                    {
+                        <RadzenTabs RenderMode="TabRenderMode.Client" Style="margin-top: 1rem;">
+                            <Tabs>
+                                <RadzenTabsItem Text="Overview" Icon="analytics">
+                                    <RadzenStack Gap="1.5rem" Style="padding-top: 1rem;">
+                                        <RadzenAlert Severity="Severity.Info" AllowClose="false" Size="AlertSize.Small">
+                                            Select an element on the canvas to edit its properties.
+                                        </RadzenAlert>
+
+                                        @if (_diagramStats != null)
+                                        {
+                                            <div style="background: #fcfcfc; border: 1px solid #f0f0f0; border-radius: 8px; padding: 1rem;">
+                                                <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #666; font-weight: bold; margin-bottom: 1rem;">Architecture Overview</RadzenText>
+                                                <RadzenStack Gap="0.75rem">
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <RadzenText TextStyle="TextStyle.Caption">Total Elements</RadzenText>
+                                                        <RadzenBadge BadgeStyle="BadgeStyle.Light" IsPill="true" Text="@_diagramStats.Total.ToString()" />
+                                                    </div>
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <RadzenText TextStyle="TextStyle.Caption">Tasks & Activities</RadzenText>
+                                                        <RadzenBadge BadgeStyle="BadgeStyle.Info" IsPill="true" Text="@_diagramStats.Tasks.ToString()" />
+                                                    </div>
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <RadzenText TextStyle="TextStyle.Caption">Gateways</RadzenText>
+                                                        <RadzenBadge BadgeStyle="BadgeStyle.Warning" IsPill="true" Text="@_diagramStats.Gateways.ToString()" />
+                                                    </div>
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <RadzenText TextStyle="TextStyle.Caption">Events</RadzenText>
+                                                        <RadzenBadge BadgeStyle="BadgeStyle.Success" IsPill="true" Text="@_diagramStats.Events.ToString()" />
+                                                    </div>
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <RadzenText TextStyle="TextStyle.Caption">Flow Connections</RadzenText>
+                                                        <RadzenText TextStyle="TextStyle.Caption" Style="font-weight:bold; color: #4facfe;">@_diagramStats.Flows.ToString()</RadzenText>
+                                                    </div>
+                                                </RadzenStack>
+                                            </div>
+                                        }
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="Collaboration" Icon="chat">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+                                           @if (_isCommentsLoading)
+                                            {
+                                                <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                                            }
+                                            else if (!_comments.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No workflow-level comments yet.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                foreach (var comment in _comments.Where(c => c.ElementId == null))
+                                                {
+                                                    <div style="background: white; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                                        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                                                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #4facfe; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; font-size: 0.8rem;">
+                                                                @comment.UserName.ToUpper().FirstOrDefault()
+                                                            </div>
+                                                            <div style="flex-grow: 1;">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="font-weight: bold; color: #444; margin: 0;">@comment.UserName</RadzenText>
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #888; font-size: 0.65rem;">@comment.CreatedAt.ToLocalTime().ToString("MMM dd, HH:mm")</RadzenText>
+                                                                </div>
+                                                                <RadzenText TextStyle="TextStyle.Body2" Style="margin-top: 0.25rem; color: #333; line-height: 1.4;">@comment.Text</RadzenText>
+                                                                
+                                                                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 0.5rem;">
+                                                                    <div></div>
+                                                                    @if (comment.UserId == _currentUserId)
+                                                                    {
+                                                                        <RadzenButton Icon="delete" Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Danger"
+                                                                                      Variant="Variant.Text" Click="@(() => DeleteComment(comment.Id))" />
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                        <RadzenStack Gap="0.5rem">
+                                            <RadzenTextArea @bind-Value="@_newCommentText" Placeholder="Add a workflow comment..." Style="width: 100%; height: 60px;" />
+                                            <RadzenButton Text="Post" Icon="send" Click="@AddComment" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small" Disabled="@(string.IsNullOrWhiteSpace(_newCommentText))" />
+                                        </RadzenStack>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="History" Icon="history">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 450px; overflow-y: auto; padding-right: 0.5rem;">
+                                            @if (_isAuditLoading)
+                                            {
+                                                <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                                            }
+                                            else if (!_auditLogs.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No history available.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                foreach (var log in _auditLogs)
+                                                {
+                                                    var icon = log.Action switch
+                                                    {
+                                                        "Create" => "add_circle",
+                                                        "Update" => "edit",
+                                                        "Restore" => "settings_backup_restore",
+                                                        "Delete" => "delete",
+                                                        _ => "event_note"
+                                                    };
+                                                    var color = log.Action switch
+                                                    {
+                                                        "Create" => "#4caf50",
+                                                        "Update" => "#4facfe",
+                                                        "Restore" => "#ff9800",
+                                                        "Delete" => "#f44336",
+                                                        _ => "#aaa"
+                                                    };
+
+                                                    <div style="padding: 0.75rem 0.5rem; border-bottom: 1px solid #f5f5f5; position: relative;">
+                                                        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                                                            <div style="display: flex; flex-direction: column; align-items: center; width: 24px;">
+                                                                <RadzenIcon Icon="@icon" Style="@($"font-size: 1.2rem; color: {color};")" />
+                                                                <div style="width: 2px; flex-grow: 1; background: #f0f0f0; margin-top: 4px; min-height: 20px;"></div>
+                                                            </div>
+                                                            <div style="flex-grow: 1;">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="font-weight: bold; color: #333; margin: 0;">@log.UserName @log.Action</RadzenText>
+                                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #999; font-size: 0.65rem;">@log.Timestamp.ToLocalTime().ToString("MMM dd, HH:mm")</RadzenText>
+                                                                </div>
+                                                                <RadzenText TextStyle="TextStyle.Body2" Style="margin-top: 4px; font-size: 0.75rem; line-height: 1.2; color: #666;">@log.Changes</RadzenText>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                                <RadzenTabsItem Text="Local" Icon="history_edu">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        <div style="max-height: 450px; overflow-y: auto; padding-right: 0.25rem;">
+                                            @if (!_commandHistory.Any())
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #666; font-style: italic;">No actions in this session.</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                <RadzenStack Gap="4px">
+                                                    @foreach (var cmd in _commandHistory.AsEnumerable().Reverse())
+                                                    {
+                                                        <div style="@($"padding: 6px 8px; border-radius: 4px; border-left: 3px solid {(cmd.IsUndo ? "#eee" : "#4facfe")}; background: {(cmd.IsUndo ? "#fafafa" : "#fff")}; opacity: {(cmd.IsUndo ? "0.5" : "1")}; display:flex; align-items:center; gap:0.5rem; transition: all 0.2s;")">
+                                                            <RadzenIcon Icon="@(cmd.IsUndo ? "update" : "check_circle")" Style="font-size: 0.9rem; color: #aaa;" />
+                                                            <RadzenText TextStyle="TextStyle.Caption" Style="@($"flex-grow:1; margin:0; {(cmd.IsUndo ? "text-decoration: line-through; color: #999;" : "color: #444; font-weight: 500;")}")">@cmd.Label</RadzenText>
+                                                        </div>
+                                                    }
+                                                </RadzenStack>
+                                            }
+                                        </div>
+                                        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                                            <RadzenButton Icon="undo" Text="Undo" Size="ButtonSize.ExtraSmall" Click="@(() => BpmnInterop.UndoAsync())" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" style="flex: 1" />
+                                            <RadzenButton Icon="redo" Text="Redo" Size="ButtonSize.ExtraSmall" Click="@(() => BpmnInterop.RedoAsync())" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" style="flex: 1" />
+                                        </RadzenStack>
+                                    </RadzenStack>
+                                </RadzenTabsItem>
+                            </Tabs>
+                        </RadzenTabs>
+                    }
+                </RadzenCard>
+            }
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+        <RadzenButton Icon="save" Text="Save" ButtonStyle="ButtonStyle.Primary" Click="@SaveAsync" />
+        @if (WorkflowId.HasValue)
+        {
+            <RadzenButton Icon="visibility" Text="Preview" ButtonStyle="ButtonStyle.Info" 
+                          Click="@(() => NavigationManager.NavigateTo($"/workflow-preview/{WorkflowId.Value}"))" />
+            <RadzenButton Icon="bug_report" Text="View Debug" ButtonStyle="ButtonStyle.Secondary" 
+                          Click="@(() => NavigationManager.NavigateTo($"/workflow-debug/{WorkflowId.Value}"))" />
+        }
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public Guid? WorkflowId { get; set; }
+    
+    private readonly string _containerId = $"bpmn-container-{Guid.NewGuid()}";
+    private string _name = "New Workflow";
+    private bool _isDataLoaded = false;
+    private bool _isLoading = false;
+    private bool _isDiagramLoaded = false;
+    private bool _isPropertiesVisible = true;
+    private bool _isSimulating = false;
+    private bool _isDiffMode = false;
+    private WorkflowDto? _workflow;
+    private DiagramStatsDto? _diagramStats;
+    private System.Timers.Timer? _autoSaveTimer;
+    private const string AutoSaveKeyStub = "autosave_workflow_";
+    private string? _templateXml;
+    private BpmnElementData? _selectedElement;
+    private IEnumerable<CommentDto> _comments = new List<CommentDto>();
+    private IEnumerable<AuditLogDto> _auditLogs = new List<AuditLogDto>();
+    private string _newCommentText = string.Empty;
+    private bool _isCommentsLoading = false;
+    private bool _isAuditLoading = false;
+    private Guid? _currentUserId;
+    private string _currentUserName = "Unknown";
+    private List<CommandStackEntryDto> _commandHistory = new();
+    private HubConnection? _hubConnection;
+    private List<string> _activeUsers = new();
+    private string? _hubUrl;
+    private IEnumerable<FormDefinitionDto> _availableForms = new List<FormDefinitionDto>();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _availableForms = await FormService.GetAllAsync();
+        
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            var nameClaim = user.FindFirst(System.Security.Claims.ClaimTypes.Name);
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                _currentUserId = userId;
+                _currentUserName = nameClaim?.Value ?? "User";
+            }
+        }
+
+        if (WorkflowId.HasValue)
+        {
+            var baseUrl = Configuration["ApiBaseUrl"] ?? NavigationManager.BaseUri;
+            if (baseUrl.EndsWith("/")) baseUrl = baseUrl.TrimEnd('/');
+            _hubUrl = $"{baseUrl}/hubs/workflow";
+            
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(_hubUrl, options => {
+                    options.AccessTokenProvider = async () => await LocalStorage.GetItemAsStringAsync("authToken");
+                })
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<List<string>>("UpdateUserList", users =>
+            {
+                _activeUsers = users;
+                StateHasChanged();
+            });
+
+            _hubConnection.On<string>("UserJoined", name =>
+            {
+                NotificationService.Notify(NotificationSeverity.Info, "Collab", $"{name} joined.");
+            });
+
+            _hubConnection.On<string>("UserLeft", name =>
+            {
+                NotificationService.Notify(NotificationSeverity.Info, "Collab", $"{name} left.");
+            });
+
+            _hubConnection.On<string>("ReceiveDiagramUpdate", async xml =>
+            {
+               // Simplified sync: Import whatever we receive
+               // Ideally we should check if we are the sender, but SignalR Clients.OthersInGroup handles that.
+               if (_isDiagramLoaded)
+               {
+                   await BpmnInterop.ImportXmlAsync(xml);
+                   NotificationService.Notify(NotificationSeverity.Info, "Sync", "Diagram updated by another user.");
+               }
+            });
+
+            await _hubConnection.StartAsync();
+            await _hubConnection.SendAsync("JoinWorkflow", WorkflowId.Value.ToString(), _currentUserName);
+
+            _isLoading = true;
+            try 
+            {
+                _workflow = await WorkflowService.GetByIdAsync(WorkflowId.Value);
+                if (_workflow != null)
+                {
+                    _name = _workflow.Name;
+                    await LoadCollaborativeData();
+                    _isDataLoaded = true;
+                }
+                else
+                {
+                    NotificationService.Notify(NotificationSeverity.Error, "Error", "Workflow not found");
+                    NavigationManager.NavigateTo("/workflows");
+                }
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+        else
+        {
+            // Check for template in LocalStorage
+            var templateXml = await JsRuntime.InvokeAsync<string>("localStorage.getItem", "new_workflow_template");
+            var templateName = await JsRuntime.InvokeAsync<string>("localStorage.getItem", "new_workflow_name");
+            
+            if (!string.IsNullOrEmpty(templateXml))
+            {
+                _name = templateName ?? "New Workflow";
+                _templateXml = templateXml;
+                // We'll import this in OnAfterRenderAsync when the modeler is ready
+                await JsRuntime.InvokeVoidAsync("localStorage.removeItem", "new_workflow_template");
+                await JsRuntime.InvokeVoidAsync("localStorage.removeItem", "new_workflow_name");
+            }
+            
+            _isDataLoaded = true; // New workflow, ready to start
+        }
+
+        // Initialize Auto-save timer (every 30 seconds)
+        _autoSaveTimer = new System.Timers.Timer(30000);
+        _autoSaveTimer.Elapsed += async (sender, e) => await AutoSaveAsync();
+        _autoSaveTimer.AutoReset = true;
+        _autoSaveTimer.Enabled = true;
+    }
+
+    private async Task AutoSaveAsync()
+    {
+        if (!_isDiagramLoaded) return;
+
+        try
+        {
+            var (success, xml) = await BpmnInterop.ExportXmlAsync();
+            if (success && !string.IsNullOrWhiteSpace(xml))
+            {
+                var key = WorkflowId.HasValue ? $"{AutoSaveKeyStub}{WorkflowId}" : $"{AutoSaveKeyStub}new";
+                await LocalStorage.SetItemAsync(key, new { Name = _name, Xml = xml, Time = DateTime.Now });
+                Console.WriteLine($"Auto-saved to LocalStorage at {DateTime.Now}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Auto-save failed: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        _autoSaveTimer?.Dispose();
+        if (_hubConnection is not null)
+        {
+            _ = _hubConnection.SendAsync("LeaveWorkflow", WorkflowId?.ToString() ?? "");
+            _ = _hubConnection.DisposeAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // 1. Initialize the Modeler (UI)
+            try
+            {
+                await BpmnInterop.InitializeAsync(_containerId);
+                
+                // Register Selection Listener
+                var dotNetRef = DotNetObjectReference.Create(this);
+                await BpmnInterop.RegisterSelectionListenerAsync(dotNetRef);
+                await BpmnInterop.RegisterCommandStackListenerAsync(dotNetRef);
+                await BpmnInterop.RegisterModelChangeListenerAsync(dotNetRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing Modeler: {ex.Message}");
+            }
+        }
+
+        // 2. Load Data if ready (runs on every render until executed)
+        if (_isDataLoaded && !_isDiagramLoaded)
+        {
+            // ... (rest of loading logic)
+            _isDiagramLoaded = true; // Prevent re-loading
+            try
+            {
+                var key = WorkflowId.HasValue ? $"{AutoSaveKeyStub}{WorkflowId}" : $"{AutoSaveKeyStub}new";
+                var hasDraft = await LocalStorage.ContainKeyAsync(key);
+                
+                string? xmlToLoad = null;
+                
+                if (_templateXml != null)
+                {
+                    xmlToLoad = _templateXml;
+                    _templateXml = null;
+                }
+                else if (hasDraft)
+                {
+                    var draft = await LocalStorage.GetItemAsync<DraftModel>(key);
+                    if (draft != null && draft.Time > (_workflow?.UpdatedAt ?? DateTime.MinValue))
+                    {
+                        bool? restore = await DialogService.Confirm("You have unsaved changes. Restore them?", "Restore Draft");
+                        if (restore == true)
+                        {
+                            xmlToLoad = draft.Xml;
+                            _name = draft.Name;
+                        }
+                    }
+                }
+
+                if (xmlToLoad != null)
+                {
+                    await BpmnInterop.ImportXmlAsync(xmlToLoad);
+                }
+                else if (_workflow != null && !string.IsNullOrEmpty(_workflow.BpmnXml))
+                {
+                    await BpmnInterop.ImportXmlAsync(_workflow.BpmnXml);
+                }
+                else
+                {
+                    await BpmnInterop.CreateNewDiagramAsync();
+                }
+
+                _diagramStats = await BpmnInterop.GetDiagramStatisticsAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading diagram: {ex.Message}");
+                _isDiagramLoaded = false; 
+            }
+        }
+    }
+
+    private class DraftModel {
+        public string Name { get; set; } = "";
+        public string Xml { get; set; } = "";
+        public DateTime Time { get; set; }
+    }
+
+    [JSInvokable]
+    public async Task OnExternalSelectionChanged(BpmnElementData? element)
+    {
+        _selectedElement = element;
+        if (element == null)
+        {
+            _diagramStats = await BpmnInterop.GetDiagramStatisticsAsync();
+        }
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnCommandStackChanged()
+    {
+        _commandHistory = await BpmnInterop.GetCommandStackAsync();
+        StateHasChanged();
+    }
+
+    private async Task UpdateProperty(string key, string value)
+    {
+        if (_selectedElement != null)
+        {
+            if (key == "name") _selectedElement.Name = value;
+            else if (key == "documentation") _selectedElement.Documentation = value;
+            else if (key == "condition") _selectedElement.Condition = value;
+            else if (key == "color") _selectedElement.Color = value;
+            else if (key == "backgroundColor") _selectedElement.BackgroundColor = value;
+
+            await BpmnInterop.UpdateElementPropertyAsync(_selectedElement.Id, key, value);
+        }
+    }
+
+
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            Console.WriteLine("Starting save operation...");
+            
+            var (xmlSuccess, xml) = await BpmnInterop.ExportXmlAsync();
+            
+            if (!xmlSuccess || string.IsNullOrWhiteSpace(xml))
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Save failed", "Could not export XML from diagram");
+                return;
+            }
+
+            var (svgSuccess, svg) = await BpmnInterop.ExportSvgAsync();
+
+            var request = new UpsertWorkflowRequest
+            {
+                Name = _name,
+                BpmnXml = xml,
+                SvgPreview = svgSuccess ? svg : null
+            };
+
+            if (WorkflowId.HasValue)
+            {
+                var updated = await WorkflowService.UpdateAsync(WorkflowId.Value, request);
+                if (updated != null)
+                {
+                    // Clear auto-save draft on successful server save
+                    await LocalStorage.RemoveItemAsync($"{AutoSaveKeyStub}{WorkflowId}");
+                    await LoadCollaborativeData();
+                    NotificationService.Notify(NotificationSeverity.Success, "Saved", "Workflow updated successfully");
+                }
+                else
+                {
+                    NotificationService.Notify(NotificationSeverity.Error, "Save failed", "Failed to update workflow");
+                }
+            }
+            else
+            {
+                var created = await WorkflowService.CreateAsync(request);
+                if (created != null)
+                {
+                    // Clear auto-save draft on successful server save
+                    await LocalStorage.RemoveItemAsync($"{AutoSaveKeyStub}new");
+                    WorkflowId = created.Id;
+                    await LoadCollaborativeData();
+                    NotificationService.Notify(NotificationSeverity.Success, "Saved", "Workflow created successfully");
+                    NavigationManager.NavigateTo($"/workflow-editor/{created.Id}");
+                }
+                else
+                {
+                    NotificationService.Notify(NotificationSeverity.Error, "Save failed", "Failed to create workflow");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving workflow: {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"An error occurred: {ex.Message}");
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/workflows");
+    }
+
+    private async Task ResetElementStyle()
+    {
+        if (_selectedElement != null)
+        {
+            await BpmnInterop.UpdateElementPropertyAsync(_selectedElement.Id, "color", "#000000");
+            await BpmnInterop.UpdateElementPropertyAsync(_selectedElement.Id, "backgroundColor", "#ffffff");
+            _selectedElement.Color = "#000000";
+            _selectedElement.BackgroundColor = "#ffffff";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ZoomIn() => await BpmnInterop.ZoomInAsync();
+    
+    private async Task ZoomOut() => await BpmnInterop.ZoomOutAsync();
+    
+    private async Task FitToViewport() => await BpmnInterop.ResetZoomAsync();
+    
+    private async Task ActualSize() => await BpmnInterop.ZoomToActualAsync();
+
+    private async Task Undo() => await BpmnInterop.UndoAsync();
+
+    private async Task Redo() => await BpmnInterop.RedoAsync();
+
+    private async Task DownloadBPMN()
+    {
+        var (success, xml) = await BpmnInterop.ExportXmlAsync();
+        if (success && !string.IsNullOrEmpty(xml))
+        {
+            var fileName = $"{_name.Replace(" ", "_").ToLower()}.bpmn";
+            await BpmnInterop.DownloadFileAsync(fileName, xml, "application/xml");
+            NotificationService.Notify(NotificationSeverity.Success, "Downloaded", "BPMN file downloaded");
+        }
+    }
+
+    private async Task DownloadSVG()
+    {
+         var (success, svg) = await BpmnInterop.ExportSvgAsync();
+        if (success && !string.IsNullOrEmpty(svg))
+        {
+            var fileName = $"{_name.Replace(" ", "_").ToLower()}.svg";
+            await BpmnInterop.DownloadFileAsync(fileName, svg, "image/svg+xml");
+             NotificationService.Notify(NotificationSeverity.Success, "Downloaded", "SVG image downloaded");
+        }
+    }
+
+    private async Task DownloadPNG()
+    {
+        var (success, dataUrl) = await BpmnInterop.ExportPngAsync();
+        if (success && !string.IsNullOrEmpty(dataUrl))
+        {
+            // dataUrl is something like "data:image/png;base64,..."
+            var base64 = dataUrl.Split(',')[1];
+            var filename = $"workflow_{(_name ?? "diagram").Replace(" ", "_")}.png";
+            await BpmnInterop.DownloadBinaryFileAsync(filename, base64, "image/png");
+             NotificationService.Notify(NotificationSeverity.Success, "Export Success", "PNG image downloaded");
+        }
+        else
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Export Failed", "Could not generate PNG");
+        }
+    }
+
+    private async Task DownloadPDF()
+    {
+        NotificationService.Notify(NotificationSeverity.Info, "Preparing PDF", "Please wait while we generate your document...");
+        var (success, pdfBase64) = await BpmnInterop.ExportPdfAsync();
+        if (success && !string.IsNullOrEmpty(pdfBase64))
+        {
+            var fileName = $"{_name.Replace(" ", "_").ToLower()}.pdf";
+            await BpmnInterop.DownloadBinaryFileAsync(fileName, pdfBase64, "application/pdf");
+            NotificationService.Notify(NotificationSeverity.Success, "Downloaded", "PDF document downloaded");
+        }
+        else
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Export Failed", "Could not generate PDF");
+        }
+    }
+
+    private async Task DownloadWord()
+    {
+        NotificationService.Notify(NotificationSeverity.Info, "Preparing Word Doc", "Please wait while we generate your documentation...");
+        
+        try
+        {
+            var elements = await BpmnInterop.GetDiagramElementsAsync();
+            var (pngSuccess, pngDataUrl) = await BpmnInterop.ExportPngAsync();
+            
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>");
+            sb.AppendLine("<head><meta charset='utf-8'><style>body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; } h1 { color: #1a5a96; } h2 { color: #2c3e50; border-bottom: 2px solid #3498db; margin-top: 2rem; } table { border-collapse: collapse; width: 100%; margin-top: 1rem; } th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; } th { background-color: #f8f9fa; font-weight: bold; } .meta { color: #7f8c8d; font-size: 0.9rem; }</style></head>");
+            sb.AppendLine("<body>");
+            
+            sb.AppendLine($"<h1>Workflow: {_name}</h1>");
+            
+            if (_workflow != null && !string.IsNullOrEmpty(_workflow.Description))
+            {
+                sb.AppendLine("<h2>Overview</h2>");
+                sb.AppendLine($"<p>{Markdig.Markdown.ToHtml(_workflow.Description)}</p>");
+            }
+            
+            if (pngSuccess && !string.IsNullOrEmpty(pngDataUrl))
+            {
+                sb.AppendLine("<h2>Visual Diagram</h2>");
+                sb.AppendLine($"<p><img src='{pngDataUrl}' style='max-width: 100%; border: 1px solid #ccc;' /></p>");
+            }
+            
+            sb.AppendLine("<h2>Detailed Element Specifications</h2>");
+            sb.AppendLine("<table>");
+            sb.AppendLine("<thead><tr><th>Reference ID</th><th>Type</th><th>Name</th><th>Documentation / Business Rules</th></tr></thead>");
+            sb.AppendLine("<tbody>");
+            
+            foreach (var el in elements)
+            {
+                sb.AppendLine("<tr>");
+                sb.AppendLine($"<td><code>{el.Id}</code></td>");
+                sb.AppendLine($"<td>{el.Type.Replace("bpmn:", "")}</td>");
+                sb.AppendLine($"<td><strong>{el.Name}</strong></td>");
+                sb.AppendLine($"<td>{(string.IsNullOrEmpty(el.Documentation) ? "<em>No documentation provided.</em>" : el.Documentation)}</td>");
+                sb.AppendLine("</tr>");
+            }
+            
+            sb.AppendLine("</tbody></table>");
+            
+            sb.AppendLine("<hr />");
+            sb.AppendLine($"<p class='meta'>Generated by <strong>BPMN Workflow Designer</strong> on {DateTime.Now:f}.</p>");
+            sb.AppendLine("</body></html>");
+            
+            var fileName = $"{(_name ?? "workflow").Replace(" ", "_").ToLower()}_documentation.doc";
+            await BpmnInterop.DownloadFileAsync(fileName, sb.ToString(), "application/msword");
+            NotificationService.Notify(NotificationSeverity.Success, "Export Success", "Word documentation downloaded.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Word export error: {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Export Failed", "Could not generate Word document.");
+        }
+    }
+
+    private async Task DownloadPowerPoint()
+    {
+        NotificationService.Notify(NotificationSeverity.Info, "Preparing PowerPoint", "Generating slides...");
+        try 
+        {
+            var (success, dataUrl) = await BpmnInterop.ExportPngAsync();
+            if (success && !string.IsNullOrEmpty(dataUrl))
+            {
+                var base64 = dataUrl.Split(',')[1];
+                var pptxBytes = PowerPointService.CreatePowerPoint(_name, _workflow?.Description ?? "", base64);
+                
+                var base64Pptx = Convert.ToBase64String(pptxBytes);
+                var fileName = $"{(_name ?? "presentation").Replace(" ", "_")}.pptx";
+                
+                await BpmnInterop.DownloadBinaryFileAsync(fileName, base64Pptx, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+                NotificationService.Notify(NotificationSeverity.Success, "Export Success", "PPTX downloaded.");
+            }
+            else
+            {
+                 NotificationService.Notify(NotificationSeverity.Error, "Export Failed", "Could not capture diagram image.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PPTX Export error: {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Export Failed", "Could not generate PowerPoint.");
+        }
+    }
+
+    private async Task ValidateAsync()
+    {
+        var result = await BpmnInterop.ValidateDiagramAsync();
+        
+        if (!result.Success)
+        {
+             NotificationService.Notify(NotificationSeverity.Error, "Validation Error", result.Error ?? "Unknown error");
+             return;
+        }
+
+        if (result.Errors.Any() || result.Warnings.Any())
+        {
+            await DialogService.OpenAsync("Validation Results", ds =>
+                @<RadzenStack Gap="1rem">
+                    @if (result.Errors.Any())
+                    {
+                        <RadzenText TextStyle="TextStyle.H6" Style="color:red">Errors (@result.Errors.Count)</RadzenText>
+                        <ul>
+                            @foreach(var err in result.Errors) { <li>@err</li> }
+                        </ul>
+                    }
+                    @if (result.Warnings.Any())
+                    {
+                        <RadzenText TextStyle="TextStyle.H6" Style="color:orange">Warnings (@result.Warnings.Count)</RadzenText>
+                        <ul>
+                            @foreach(var warn in result.Warnings) { <li>@warn</li> }
+                        </ul>
+                    }
+                     <RadzenButton Text="Close" Click="() => ds.Close(true)" Style="width: 100px" ButtonStyle="ButtonStyle.Light" />
+                </RadzenStack>);
+        }
+        else
+        {
+             NotificationService.Notify(NotificationSeverity.Success, "Valid", "Diagram is valid! No errors or warnings found.");
+        }
+    }
+    private async Task StartSimulation()
+    {
+        var dotNetObjRef = DotNetObjectReference.Create(this);
+        var success = await BpmnInterop.StartSimulationAsync(dotNetObjRef);
+        if (success)
+        {
+            _isSimulating = true;
+            NotificationService.Notify(NotificationSeverity.Info, "Simulation Started", "Click on active elements to advance the flow.");
+        }
+    }
+
+    private async Task StopSimulation()
+    {
+        await BpmnInterop.StopSimulationAsync();
+        _isSimulating = false;
+        NotificationService.Notify(NotificationSeverity.Info, "Simulation Stopped", "Returned to edit mode.");
+    }
+
+    private async Task ShowVersionHistory()
+    {
+        if (!WorkflowId.HasValue) return;
+
+        var versions = await WorkflowService.GetVersionsAsync(WorkflowId.Value);
+
+        await DialogService.OpenAsync("Version History", ds =>
+            @<RadzenStack Gap="1rem">
+                <RadzenDataGrid Data="@versions" TItem="WorkflowVersionDto" AllowPaging="true" PageSize="5">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="WorkflowVersionDto" Property="VersionNumber" Title="v" Width="50px" />
+                        <RadzenDataGridColumn TItem="WorkflowVersionDto" Property="CreatedAt" Title="Date" FormatString="{0:g}" />
+                        <RadzenDataGridColumn TItem="WorkflowVersionDto" Property="Comment" Title="Comment" />
+                        <RadzenDataGridColumn TItem="WorkflowVersionDto" Title="Action" Width="180px">
+                            <Template Context="v">
+                                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.25rem">
+                                    <RadzenButton Icon="compare_arrows" Text="Diff" ButtonStyle="ButtonStyle.Info" Size="ButtonSize.ExtraSmall"
+                                                  Click="@(() => CompareWithVersion(v.BpmnXml, ds))" title="Compare current with this version" />
+                                    <RadzenButton Icon="restart_alt" Text="Restore" ButtonStyle="ButtonStyle.Warning" Size="ButtonSize.ExtraSmall"
+                                                  Click="@(() => RestoreVersion(v.Id, ds))" />
+                                </RadzenStack>
+                            </Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End">
+                    <RadzenButton Text="Close" Click="() => ds.Close()" ButtonStyle="ButtonStyle.Light" />
+                </RadzenStack>
+            </RadzenStack>, new DialogOptions { Width = "700px" });
+    }
+
+    private async Task RestoreVersion(Guid versionId, DialogService ds)
+    {
+        var confirm = await DialogService.Confirm("Are you sure you want to restore this version? Unsaved changes will be lost.", "Restore Version");
+        if (confirm == true)
+        {
+            var restored = await WorkflowService.RestoreVersionAsync(WorkflowId!.Value, versionId);
+            if (restored != null)
+            {
+                ds.Close();
+                _name = restored.Name;
+                await BpmnInterop.ImportXmlAsync(restored.BpmnXml);
+                await LoadCollaborativeData();
+                NotificationService.Notify(NotificationSeverity.Success, "Restored", $"Restored to version {restored.Version}");
+            }
+        }
+    }
+
+    private async Task ShowKeyboardShortcuts()
+    {
+        await DialogService.OpenAsync("Keyboard Shortcuts", ds => 
+            @<RadzenStack Gap="1rem">
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Subtitle2">Action</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Subtitle2">Shortcut</RadzenText></RadzenColumn>
+                </RadzenRow>
+                <hr style="margin: 0" />
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Undo</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Ctrl + Z" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Redo</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Ctrl + Y" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Select Tool</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="S" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Hand (Pan) Tool</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="H" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Lasso Tool</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="L" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Delete Element</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Del / Backspace" /></RadzenColumn>
+                </RadzenRow>
+                 <RadzenRow>
+                    <RadzenColumn Size="6"><RadzenText TextStyle="TextStyle.Body2">Scroll / Pan</RadzenText></RadzenColumn>
+                    <RadzenColumn Size="6"><RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Space + Drag" /></RadzenColumn>
+                </RadzenRow>
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Style="margin-top: 1rem;">
+                    <RadzenButton Text="Close" Click="() => ds.Close()" ButtonStyle="ButtonStyle.Light" />
+                </RadzenStack>
+            </RadzenStack>
+        );
+    }
+
+    private async Task LoadCollaborativeData()
+    {
+        if (!WorkflowId.HasValue) return;
+
+        _isCommentsLoading = true;
+        _isAuditLoading = true;
+        StateHasChanged();
+
+        try 
+        {
+            _comments = await CommentService.GetCommentsAsync(WorkflowId.Value);
+            _auditLogs = await WorkflowService.GetAuditLogsAsync(WorkflowId.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading collaborative data: {ex.Message}");
+        }
+        finally
+        {
+            _isCommentsLoading = false;
+            _isAuditLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(_newCommentText) || !WorkflowId.HasValue) return;
+
+        var result = await CommentService.AddCommentAsync(WorkflowId.Value, _newCommentText, _selectedElement?.Id);
+        if (result != null)
+        {
+            _newCommentText = string.Empty;
+            await LoadCollaborativeData();
+            NotificationService.Notify(NotificationSeverity.Success, "Comment Added");
+        }
+        else
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Failed to add comment");
+        }
+    }
+
+    private async Task DeleteComment(Guid commentId)
+    {
+        var confirm = await DialogService.Confirm("Are you sure you want to delete this comment?", "Delete Comment");
+        if (confirm == true)
+        {
+            var success = await CommentService.DeleteCommentAsync(commentId);
+            if (success)
+            {
+                await LoadCollaborativeData();
+                NotificationService.Notify(NotificationSeverity.Success, "Comment Deleted");
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Failed to delete comment");
+            }
+        }
+    }
+
+    private async Task CompareWithVersion(string versionXml, DialogService ds)
+    {
+        ds.Close();
+        var (success, currentXml) = await BpmnInterop.ExportXmlAsync();
+        if (success && !string.IsNullOrEmpty(currentXml))
+        {
+            _isDiffMode = true;
+            await BpmnInterop.ShowDiffAsync(versionXml, currentXml);
+            NotificationService.Notify(NotificationSeverity.Info, "Diff Mode Active", "Highlights show differences relative to the selected version.");
+        }
+    }
+
+    private async Task ExitDiffMode()
+    {
+        await BpmnInterop.ClearDiffAsync();
+        _isDiffMode = false;
+        StateHasChanged();
+    }
+    [JSInvokable]
+    public async Task OnModelChanged(string xml)
+    {
+        if (WorkflowId.HasValue && _hubConnection is not null && _hubConnection.State == HubConnectionState.Connected)
+        {
+             await _hubConnection.SendAsync("SendDiagramUpdate", WorkflowId.Value.ToString(), xml);
+        }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            try
+            {
+                if (_hubConnection.State != HubConnectionState.Disconnected)
+                {
+                    await _hubConnection.StopAsync();
+                }
+                await _hubConnection.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error disposing HubConnection: {ex.Message}");
+            }
+        }
+    }
+}
+
+

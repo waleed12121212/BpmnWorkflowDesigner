@@ -1,0 +1,69 @@
+@page "/forms"
+@using Microsoft.AspNetCore.Authorization
+@using BpmnWorkflow.Client.Models
+@attribute [Authorize]
+@inject Services.IFormService FormService
+@inject NavigationManager NavigationManager
+@inject Radzen.DialogService DialogService
+@inject Radzen.NotificationService NotificationService
+
+<PageTitle>Forms Management</PageTitle>
+
+<RadzenStack Gap="1rem" Style="padding: 1rem;">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+        <RadzenText TextStyle="TextStyle.H3" Style="margin: 0;">Form Definitions</RadzenText>
+        <RadzenButton Icon="add" Text="Create New Form" ButtonStyle="ButtonStyle.Primary" Click="@(() => NavigationManager.NavigateTo("/form-editor"))" />
+    </RadzenStack>
+
+    <RadzenCard>
+        <RadzenDataGrid Data="@_forms" TItem="FormDefinitionDto" AllowPaging="true" PageSize="10" IsLoading="@_isLoading">
+            <Columns>
+                <RadzenDataGridColumn TItem="FormDefinitionDto" Property="Name" Title="Form Name" />
+                <RadzenDataGridColumn TItem="FormDefinitionDto" Property="OwnerName" Title="Owner" />
+                <RadzenDataGridColumn TItem="FormDefinitionDto" Property="UpdatedAt" Title="Last Updated" FormatString="{0:d}" />
+                <RadzenDataGridColumn TItem="FormDefinitionDto" Title="Actions" Sortable="false" Filterable="false" Width="150px">
+                    <Template Context="form">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" 
+                                      Click="@(() => NavigationManager.NavigateTo($"/form-editor/{form.Id}"))" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" 
+                                      Click="@(() => DeleteForm(form))" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+</RadzenStack>
+
+@code {
+    private IEnumerable<FormDefinitionDto> _forms = new List<FormDefinitionDto>();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadForms();
+    }
+
+    private async Task LoadForms()
+    {
+        _isLoading = true;
+        try
+        {
+            _forms = await FormService.GetAllAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DeleteForm(FormDefinitionDto form)
+    {
+        var confirm = await DialogService.Confirm($"Are you sure you want to delete '{form.Name}'?", "Delete Form");
+        if (confirm == true)
+        {
+            await FormService.DeleteAsync(form.Id);
+            await LoadForms();
+            NotificationService.Notify(NotificationSeverity.Success, "Deleted", "Form deleted successfully");
+        }
+    }
+}

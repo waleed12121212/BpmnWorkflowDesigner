@@ -1,0 +1,95 @@
+@page "/register"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+
+<PageTitle>Register - BPMN Designer</PageTitle>
+
+<RadzenRow JustifyContent="JustifyContent.Center" AlignItems="AlignItems.Center" Style="min-height: 80vh;">
+    <RadzenColumn Size="12" SizeMD="5">
+        <RadzenCard Variant="Variant.Flat" Style="padding: 2rem;">
+            <RadzenStack Gap="1.5rem">
+                <RadzenStack AlignItems="AlignItems.Center">
+                    <RadzenIcon Icon="person_add" Style="font-size: 4rem; color: var(--rz-primary);" />
+                    <RadzenText TextStyle="TextStyle.H4">Create Account</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Subtitle2">Join our platform to start designing workflows</RadzenText>
+                </RadzenStack>
+
+                <RadzenStack Gap="1rem">
+                    <RadzenRow>
+                        <RadzenColumn Size="6">
+                            <RadzenFormField Text="First Name" Variant="Variant.Outlined" Style="width: 100%;">
+                                <RadzenTextBox @bind-Value="_registerRequest.FirstName" />
+                            </RadzenFormField>
+                        </RadzenColumn>
+                        <RadzenColumn Size="6">
+                            <RadzenFormField Text="Last Name" Variant="Variant.Outlined" Style="width: 100%;">
+                                <RadzenTextBox @bind-Value="_registerRequest.LastName" />
+                            </RadzenFormField>
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenFormField Text="Username" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_registerRequest.Username" Style="width: 100%;" />
+                    </RadzenFormField>
+
+                    <RadzenFormField Text="Email" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_registerRequest.Email" Style="width: 100%;" />
+                    </RadzenFormField>
+
+                    <RadzenFormField Text="Password" Variant="Variant.Outlined">
+                        <RadzenPassword @bind-Value="_registerRequest.Password" Style="width: 100%;" />
+                    </RadzenFormField>
+
+                    <RadzenButton Text="Register" Icon="how_to_reg" Click="@OnRegister" IsBusy="@_isBusy" 
+                                  ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Large" Style="width: 100%; margin-top: 1rem;" />
+
+                    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Center" Gap="0.5rem">
+                        <RadzenText TextStyle="TextStyle.Body2">Already have an account?</RadzenText>
+                        <RadzenLink Path="/login" Text="Sign in" />
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+</RadzenRow>
+
+@code {
+    private RegisterRequest _registerRequest = new();
+    private bool _isBusy;
+
+    private async Task OnRegister()
+    {
+        if (string.IsNullOrWhiteSpace(_registerRequest.Username) || string.IsNullOrWhiteSpace(_registerRequest.Password) || string.IsNullOrWhiteSpace(_registerRequest.Email))
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Validation", "Username, Email and Password are required");
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var result = await AuthService.RegisterAsync(_registerRequest);
+            if (result.Success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Registration Successful", "Account created! You can now login.");
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Registration Failed", result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "An unexpected error occurred during registration");
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

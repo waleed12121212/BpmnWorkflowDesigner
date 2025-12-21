@@ -1,0 +1,102 @@
+@page "/workflows"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject Services.IWorkflowService WorkflowService
+@inject NavigationManager NavigationManager
+
+@inject Radzen.DialogService DialogService
+@inject Radzen.NotificationService NotificationService
+
+<PageTitle>Workflows</PageTitle>
+
+<RadzenStack Gap="1rem">
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween">
+        <RadzenText TextStyle="TextStyle.H3">Workflows</RadzenText>
+        <RadzenButton Icon="add" Text="New Workflow" ButtonStyle="ButtonStyle.Primary"
+                      Click="@CreateNew" />
+    </RadzenStack>
+
+    <RadzenCard>
+        <RadzenTextBox @bind-Value="_search" Placeholder="Search workflows..."
+                       Style="width:100%;" Change="@OnSearchChanged" />
+    </RadzenCard>
+
+    <RadzenCard>
+        <RadzenDataGrid @ref="_grid" Data="@_workflows" TItem="BpmnWorkflow.Client.Models.WorkflowDto"
+                        Count="@_totalCount" LoadData="@LoadData" AllowPaging="true" PageSize="10" IsLoading="@_isLoading">
+            <Columns>
+                <RadzenDataGridColumn TItem="BpmnWorkflow.Client.Models.WorkflowDto" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="BpmnWorkflow.Client.Models.WorkflowDto" Property="OwnerName" Title="Owner" />
+                <RadzenDataGridColumn TItem="BpmnWorkflow.Client.Models.WorkflowDto" Property="Version" Title="v" Width="60px" />
+                <RadzenDataGridColumn TItem="BpmnWorkflow.Client.Models.WorkflowDto" Property="UpdatedAt" Title="Updated" FormatString="{0:d}" />
+                <RadzenDataGridColumn TItem="BpmnWorkflow.Client.Models.WorkflowDto" Title="Actions" Sortable="false" Filterable="false" Width="180px">
+                    <Template Context="workflow">
+                        <RadzenButton Icon="visibility" ButtonStyle="ButtonStyle.Info" Size="ButtonSize.Small" Class="rz-mr-1"
+                                      Click="@(() => NavigationManager.NavigateTo($"/workflow-preview/{workflow.Id}"))" 
+                                      title="Preview" />
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Class="rz-mr-1"
+                                      Click="@(() => NavigationManager.NavigateTo($"/workflow-editor/{workflow.Id}"))" 
+                                      title="Edit" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="@(() => DeleteWorkflow(workflow))" 
+                                      title="Delete" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+</RadzenStack>
+
+@code {
+    private string? _search;
+    private bool _isLoading;
+    private int _totalCount;
+    private IEnumerable<BpmnWorkflow.Client.Models.WorkflowDto> _workflows;
+    private RadzenDataGrid<BpmnWorkflow.Client.Models.WorkflowDto> _grid;
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        _isLoading = true;
+        try
+        {
+            var page = (args.Skip / args.Top) + 1 ?? 1;
+            var pageSize = args.Top ?? 10;
+            
+            var result = await WorkflowService.GetPagedWorkflowsAsync(page, (int)pageSize, _search);
+            _workflows = result.Items;
+            _totalCount = result.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "Could not load workflows");
+            Console.WriteLine($"Load error: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnSearchChanged(object _)
+    {
+        // When searching, reset to first page
+        await _grid.FirstPage();
+    }
+
+    private void CreateNew() => NavigationManager.NavigateTo("/workflow-editor");
+
+    private async Task DeleteWorkflow(BpmnWorkflow.Client.Models.WorkflowDto workflow)
+    {
+        var confirm = await DialogService.Confirm($"Are you sure you want to delete '{workflow.Name}'?", "Delete Workflow", 
+            new ConfirmOptions { OkButtonText = "Yes", CancelButtonText = "No" });
+            
+        if (confirm == true)
+        {
+            await WorkflowService.DeleteAsync(workflow.Id);
+            NotificationService.Notify(NotificationSeverity.Success, "Deleted", "Workflow deleted successfully");
+            await _grid.Reload();
+        }
+    }
+}
+
+
