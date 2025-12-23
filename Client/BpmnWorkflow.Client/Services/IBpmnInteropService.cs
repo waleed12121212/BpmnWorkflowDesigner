@@ -34,6 +34,9 @@ namespace BpmnWorkflow.Client.Services
         Task RegisterCommandStackListenerAsync(object dotnetRef);
         Task<List<BpmnElementData>> GetDiagramElementsAsync();
         Task RegisterModelChangeListenerAsync(object dotnetRef);
+        Task UpdateProcessPropertyAsync(string key, string value);
+        Task ApplyHeatmapAsync(List<Models.ActivityStatsDto> stats);
+        Task ClearHeatmapAsync();
     }
 
     public class CommandStackEntryDto
@@ -72,6 +75,8 @@ namespace BpmnWorkflow.Client.Services
         public string Color { get; set; } // Stroke color
         public string BackgroundColor { get; set; } // Fill color
         public string? FormId { get; set; }
+        public bool IsExecutable { get; set; }
+        public string? CamundaKey { get; set; }
     }
 }
 

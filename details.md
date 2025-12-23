@@ -1,121 +1,74 @@
-# تفاصيل مشروع مصمم سير العمل (BPMN Workflow Designer)
+# BPMN Workflow Designer Project Summary
 
-## 📋 نظرة عامة | Overview
-هذا المشروع عبارة عن تطبيق ويب متكامل (Full-Stack Web Application) لتصميم وإدارة مخططات سير العمل (Business Process Model and Notation - BPMN). يسمح للمستخدمين بإنشاء، تعديل، حفظ، ومعاينة المخططات بيالياً باستخدام المتصفح.
+## Overview
+A comprehensive BPMN Workflow Designer and Execution platform built with .NET Core and Blazor, integrated with Camunda Platform 7 for process orchestration.
 
----
+## Architecture
 
-## 🏗️ البنية التقنية | Architecture & Tech Stack
+### Backend (Server)
+- **Framework**: .NET 9.0 (ASP.NET Core Web API)
+- **Database**: SQL Server (Application Data), PostgreSQL (Camunda Data)
+- **Authentication**: JWT Bearer Tokens
+- **Key Services**:
+    - `CamundaService`: Handles all communication with Camunda REST API (Deployment, Process Start, Task Management).
+    - `WorkflowService`: Manages local storage of BPMN designs.
+    - `AuthService`: Handles user login and registration.
 
-يعتمد المشروع على بنية **Client-Server** حديثة:
+### Frontend (Client)
+- **Framework**: Blazor WebAssembly
+- **UI Library**: Radzen Blazor Components
+- **Features**:
+    - **Dashboard**: Overview of workflow stats.
+    - **Process Designer**: Visual BPMN editor.
+    - **Process Instances**: Monitor running workflows, view status, and cancel instances.
+    - **Task List**: Manage, claim, and complete user tasks.
+    - **Details View**: Visualize execution path (Activity Tree) and process variables.
 
-### 1. جانب العميل (Client Side)
-- **الإطار:** Blazor WebAssembly (.NET 7/8).
-- **المكتبات:**
-  - `Radzen.Blazor`: لمكونات واجهة المستخدم (UI Components) مثل الجداول والأزرار.
-  - `bpmn-js`: مكتبة JavaScript مفتوحة المصدر لرسم وعرض مخططات BPMN.
-- **التواصل:** يستخدم `HttpClient` للتحدث مع الـ API، و `IJSRuntime` للتحدث مع JavaScript.
+### Infrastructure (Docker)
+- **Camunda Platform 7**: Process engine running on port `8081` (mapped to internal 8080).
+- **PostgreSQL**: Database for Camunda.
+- **Redis**: Caching (configured but currently optional).
 
-### 2. جانب الخادم (Server Side)
-- **الإطار:** ASP.NET Core Web API.
-- **تخزين البيانات:** حالياً يستخدم تخزين في الذاكرة (In-Memory List) لأغراض التطوير (يتم مسح البيانات عند إعادة تشغيل السيرفر).
-- **الوظيفة:** استقبال طلبات الـ CRUD (إنشاء، قراءة، تحديث، حذف) ومعالجة ملفات XML و SVG.
+## Key Workflows & Features
 
----
+### 1. Process Execution Flow
+1.  **Deploy**: User creates a BPMN diagram and deploys it (`/camunda/deploy`).
+2.  **Start**: User starts a new instance from the "Process Instances" page.
+    -   *API*: `POST /api/camunda/process-definition/key/{key}/start`
+3.  **Monitor**: The new instance appears in the list.
+    -   *API*: `GET /api/camunda/process-instance`
+    -   *Enhancement*: instances are enriched with Definition Names for better visibility.
+4.  **Execute Tasks**: User navigates to "Task List" to see tasks assigned to them or unassigned group tasks.
+    -   *Actions*: Claim, Complete, Unclaim.
+    -   *API*: `GET /api/camunda/task`, `POST /api/camunda/task/{id}/complete`.
 
-## 📂 هيكلية المشروع | Project Structure
+### 2. Camunda Integration Details
+- **Connectivity**: The .NET API acts as a gateway/proxy to Camunda.
+- **Error Handling**: 
+    -   Returns **503 Service Unavailable** if Docker is down.
+    -   Handles `DateTime` parsing quirks from Camunda using a custom `JsonConverter`.
+- **Configuration**:
+    -   **Port**: 8081 (to avoid interfering with local agents on 8080).
+    -   **Timeout**: 15 seconds for responsiveness.
 
-```text
-BPMN Workflow Designer/
-├── Client/ (BpmnWorkflow.Client)
-│   ├── Pages/
-│   │   ├── Workflows.razor       # قائمة المخططات
-│   │   ├── WorkflowEditor.razor  # محرر الرسم (التعديل)
-│   │   ├── WorkflowPreview.razor # صفحة المعاينة (قراءة فقط)
-│   │   ├── WorkflowDebug.razor   # صفحة فحص البيانات الخام
-│   │   └── BpmnTest.razor        # صفحة لاختبار المكتبة
-│   ├── Services/
-│   │   ├── BpmnInteropService.cs # جسر التواصل بين C# و JS
-│   │   └── WorkflowService.cs    # خدمة الاتصال بالـ API
-│   ├── wwwroot/
-│   │   ├── js/
-│   │   │   └── bpmn-modeler.js   # كود JavaScript للتحكم بالمكتبة بصرياً
-│   │   └── css/
-│   │       └── app.css           # التنسيقات (Scrollbars, etc)
-│
-└── Server/ (BpmnWorkflow.API)
-    ├── Controllers/
-    │   └── WorkflowsController.cs # نقاط الاتصال (Endpoints)
-    └── Models/                    # كائنات نقل البيانات (DTOs)
-```
+## Recent Fixes & Improvements
+- **RadzenTreeLevel Error**: Fixed `invalid operation` exception by removing the payload-less `TItem` attribute.
+- **Camunda Port Conflict**: Moved Camunda to 8081.
+- **Process Names**: Fixed missing process names in the grid by mapping `DefinitionId` to `DefinitionName`.
+- **Date Parsing**: Added `CamundaDateTimeConverter` to handle non-standard date formats returned by the engine.
 
----
-
-## 🔧 آلية العمل (The Core Mechanics)
-
-الجزء الأكثر تعقيداً وأهمية في المشروع هو دمج مكتبة **JavaScript (bpmn-js)** داخل **Blazor**. إليك كيفية عملها:
-
-### 1. التهيئة (Initialization)
-1. تحتوي صفحة `WorkflowEditor.razor` على عنصر `div` فارغ بمعرف فريد (Container ID).
-2. عند تشغيل الصفحة، تستدعي `BpmnInterop.InitializeAsync`.
-3. يقوم كود JavaScript (`bpmn-modeler.js`) بإنشاء نسخة من `BpmnJS` وربطها بهذا الـ `div`.
-
-### 2. تحميل البيانات (Async Loading)
-لحل مشكلة التوقيت (Timing Issue):
-- يتم تهيئة الـ DOM أولاً.
-- يتم جلب البيانات من الـ API بشكل غير متزامن.
-- بمجرد وصول البيانات، يتم استدعاء `importXML` في JavaScript لرسم المخطط.
-
-### 3. الحفظ (Saving)
-1. يضغط المستخدم على زر "Save".
-2. تطلب Blazor من JavaScript استخراج البيانات:
-   - `exportXML`: للحصول على هيكل الرسمة.
-   - `exportSVG`: للحصول على صورة معاينة.
-3. يتم إرسال هذه البيانات عبر `WorkflowService` إلى الـ API ليتم حفظها.
-
----
-
-## ✨ الميزات الرئيسية | Key Features
-
-### 1. المحرر التفاعلي (Editor)
-- سحب وإفلات العناصر (Drag & Drop).
-- لوحة أدوات (Palette) على اليسار.
-- خصائص العناصر (Properties Panel) - *يمكن تطويرها مستقبلاً*.
-- أدوات تحكم مخصصة (Zoom In, Zoom Out, Fit, Actual Size).
-- شريط تمرير مخصص (Custom Scrollbar).
-
-### 2. وضع المعاينة (Preview Mode)
-- عرض الرسمة في وضع القراءة فقط.
-- نفس أدوات التحكم في التكبير والتصغير.
-- مفيد للمراجعة دون الخوف من تغيير الرسمة بالخطأ.
-
-### 3. أدوات التشخيص (Debugging Tools)
-- **Workflow Debug Page:** تعرض كود XML الخام وتفاصيل الـ SVG للتأكد من أن البيانات تُحفظ بشكل صحيح.
-- **Console Logging:** تم إضافة سجلات (Logs) تفصيلية في المتصفح لتتبع خطوات التحميل والحفظ.
-
----
-
-## 🐛 المشاكل التي تم حلها | Solved Issues
-
-### 1. مشكلة التوقيت (Async Loading)
-**المشكلة:** كانت الصفحة تحاول رسم المخطط قبل وصول البيانات من السيرفر، مما يؤدي لظهور صفحة فارغة.
-**الحل:** فصلنا عملية "تهيئة المحرر" عن "استيراد البيانات"، وجعلنا الاستيراد ينتظر وصول البيانات.
-
-### 2. مشكلة الحفظ (Failed to Fetch)
-**المشكلة:** عدم تطابق المنافذ (Ports) بين العميل والسيرفر.
-**الحل:** ضبط ملفات `launchSettings.json` لتعمل على منافذ HTTPS الصحيحة وتمكين CORS.
-
-### 3. واجهة المستخدم (UI/UX)
-**التحسينات:**
-- إضافة Scrollbar مخصص.
-- تكبير مساحة الرسم.
-- إضافة أزرار تحكم علوية بدلاً من الاعتماد على الاختصارات فقط.
-
----
-
-## 🚀 التطوير المستقبلي | Future Improvements
-
-1. **قاعدة بيانات حقيقية:** استبدال القائمة المؤقتة بـ SQL Server أو SQLite.
-2. **شريط الخصائص (Properties Panel):** السماح للمستخدم بتغيير أسماء العناصر وخصائصها من واجهة جانبية.
-3. **التصدير:** إضافة زر لتحميل الرسمة كملف صورة (PNG) أو ملف (BPMN) على جهاز المستخدم.
-4. **Validation:** التحقق من صحة الرسمة قبل الحفظ (مثلاً: التأكد من وجود نقطة بداية ونهاية).
+## How to Run
+1.  **Start Infrastructure**:
+    ```powershell
+    docker-compose up -d
+    ```
+2.  **Start Backend**:
+    ```powershell
+    cd Server\BpmnWorkflow.API
+    dotnet run --launch-profile https
+    ```
+3.  **Start Frontend**:
+    ```powershell
+    cd Client\BpmnWorkflow.Client
+    dotnet run
+    ```

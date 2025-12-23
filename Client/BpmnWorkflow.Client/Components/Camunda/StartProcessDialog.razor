@@ -1,0 +1,165 @@
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+
+<RadzenStack Gap="1rem">
+    <RadzenFormField Text="Process Definition" Variant="Variant.Outlined">
+        @if (isLoadingDefinitions)
+        {
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-p-2">
+                <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+                <RadzenText TextStyle="TextStyle.Caption">Loading definitions...</RadzenText>
+            </RadzenStack>
+        }
+        else
+        {
+            <RadzenDropDown @bind-Value="@selectedProcessKey" Data="@ProcessDefinitions" 
+                           TextProperty="Name" ValueProperty="Key" 
+                           Placeholder="Select a process..." Style="width: 100%;" 
+                           EmptyText="@(errorMessage ?? "No processes found.")" />
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <RadzenText TextStyle="TextStyle.Caption" class="rz-color-danger rz-mt-1">@errorMessage</RadzenText>
+            }
+        }
+    </RadzenFormField>
+
+    <RadzenFormField Text="Business Key (Optional)" Variant="Variant.Outlined">
+        <RadzenTextBox @bind-Value="@businessKey" Placeholder="e.g., ORDER-12345" Style="width: 100%;" />
+    </RadzenFormField>
+
+    <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mt-2">Process Variables (Optional)</RadzenText>
+    
+    @foreach (var variable in variables)
+    {
+        <RadzenCard class="rz-p-2">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center">
+                <RadzenTextBox @bind-Value="@variable.Name" Placeholder="Variable name" Style="width: 200px;" />
+                <RadzenTextBox @bind-Value="@variable.Value" Placeholder="Value" Style="flex: 1;" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" 
+                            Size="ButtonSize.Small" Click="@(() => RemoveVariable(variable))" />
+            </RadzenStack>
+        </RadzenCard>
+    }
+
+    <RadzenButton Icon="add" Text="Add Variable" Click="@AddVariable" Variant="Variant.Flat" Size="ButtonSize.Small" />
+
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" JustifyContent="JustifyContent.End" class="rz-mt-4">
+        <RadzenButton Text="Cancel" Click="@Cancel" Variant="Variant.Flat" />
+        <RadzenButton Text="Start Process" Click="@StartProcess" ButtonStyle="ButtonStyle.Primary" 
+                     Disabled="@(string.IsNullOrEmpty(selectedProcessKey) || isStarting)" />
+    </RadzenStack>
+
+    @if (isStarting)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+    }
+</RadzenStack>
+
+@code {
+    [Parameter]
+    public List<ProcessDefinitionDto> ProcessDefinitions { get; set; } = new();
+    
+    private bool isLoadingDefinitions = false;
+    private string? selectedProcessKey;
+    private string? businessKey;
+    private List<VariableInput> variables = new();
+    private bool isStarting = false;
+
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ProcessDefinitions == null || !ProcessDefinitions.Any())
+        {
+            await LoadDefinitions();
+        }
+    }
+
+    private async Task LoadDefinitions()
+    {
+        isLoadingDefinitions = true;
+        errorMessage = null;
+        try
+        {
+            ProcessDefinitions = await CamundaService.GetProcessDefinitionsAsync();
+            if (!ProcessDefinitions.Any())
+            {
+                errorMessage = "No processes found. Please deploy a workflow first.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error connecting to server. Please ensure you are logged in.";
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", "Could not load process definitions.");
+        }
+        finally
+        {
+            isLoadingDefinitions = false;
+        }
+    }
+
+    private void AddVariable()
+    {
+        variables.Add(new VariableInput());
+    }
+
+    private void RemoveVariable(VariableInput variable)
+    {
+        variables.Remove(variable);
+    }
+
+    private async Task StartProcess()
+    {
+        if (string.IsNullOrEmpty(selectedProcessKey))
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", "Please select a process definition");
+            return;
+        }
+
+        isStarting = true;
+        try
+        {
+            var variablesDict = variables
+                .Where(v => !string.IsNullOrEmpty(v.Name))
+                .ToDictionary(v => v.Name!, v => (object)v.Value!);
+
+            var request = new StartProcessInstanceRequest
+            {
+                ProcessDefinitionKey = selectedProcessKey,
+                BusinessKey = businessKey,
+                Variables = variablesDict.Any() ? variablesDict : null
+            };
+
+            var instance = await CamundaService.StartProcessInstanceAsync(request);
+            
+            if (instance != null)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", 
+                    $"Process instance started successfully: {instance.Id}");
+                DialogService.Close(instance);
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to start process: {ex.Message}");
+        }
+        finally
+        {
+            isStarting = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        DialogService.Close(null);
+    }
+
+    private class VariableInput
+    {
+        public string? Name { get; set; }
+        public string? Value { get; set; }
+    }
+}

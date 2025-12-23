@@ -2,19 +2,20 @@ window.BpmnModeler = (function () {
     let modeler = null;
 
     function createEmptyDiagram() {
-        return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-                  id="Definitions_1"
-                  targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="false">
-    <bpmn:startEvent id="StartEvent_1" />
-  </bpmn:process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1" />
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`;
+        return `<? xml version = "1.0" encoding = "UTF-8" ?>
+    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+        xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+        xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+        xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+        id="Definitions_1"
+        targetNamespace="http://bpmn.io/schema/bpmn">
+        <bpmn:process id="Process_Workflow" isExecutable="true" camunda:historyTimeToLive="180">
+            <bpmn:startEvent id="StartEvent_1" />
+        </bpmn:process>
+        <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+            <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1" />
+        </bpmndi:BPMNDiagram>
+    </bpmn:definitions>`;
     }
 
     return {
@@ -309,25 +310,39 @@ window.BpmnModeler = (function () {
                 let hasEnd = false;
 
                 elements.forEach(element => {
-                    if (element.type === 'bpmn:StartEvent') hasStart = true;
+                    if (element.type === 'bpmn:StartEvent') {
+                        if (hasStart) {
+                            errors.push("Process cannot have multiple Start Events. Please use just one.");
+                        }
+                        hasStart = true;
+                    }
                     if (element.type === 'bpmn:EndEvent') hasEnd = true;
 
                     // Check for disconnected elements
                     // Ignore StartEvent for incoming check
                     if (element.type !== 'bpmn:StartEvent' && (!element.incoming || element.incoming.length === 0)) {
                         const name = element.businessObject.name || element.id;
-                        warnings.push(`Element '${name}' (${element.type.replace('bpmn:', '')}) has no incoming flow.`);
+                        warnings.push(`Element '${name}'(${element.type.replace('bpmn:', '')}) has no incoming flow.`);
                     }
 
                     // Ignore EndEvent for outgoing check
                     if (element.type !== 'bpmn:EndEvent' && element.type !== 'bpmn:TerminateEventDefinition' && (!element.outgoing || element.outgoing.length === 0)) {
                         const name = element.businessObject.name || element.id;
-                        warnings.push(`Element '${name}' (${element.type.replace('bpmn:', '')}) has no outgoing flow.`);
+                        warnings.push(`Element '${name}'(${element.type.replace('bpmn:', '')}) has no outgoing flow.`);
                     }
                 });
 
                 if (!hasStart) errors.push("Diagram must have at least one Start Event.");
                 if (!hasEnd) errors.push("Diagram must have at least one End Event.");
+
+                // Check if process is executable (CRITICAL for Camunda)
+                const proceses = elementRegistry.filter(e => e.type === 'bpmn:Process');
+                proceses.forEach(p => {
+                    const bo = p.businessObject;
+                    if (bo.isExecutable === false || bo.isExecutable === undefined) {
+                        errors.push(`Process '${bo.name || bo.id}' is not marked as executable.It will not appear in Camunda cockpit.`);
+                    }
+                });
 
                 return { success: true, errors: errors, warnings: warnings };
             } catch (e) {
@@ -375,7 +390,7 @@ window.BpmnModeler = (function () {
                         canvas.addMarker(element.id, type === 'error' ? 'lint-error' : 'lint-warning');
                         overlays.add(element.id, 'lint-overlay', {
                             position: { top: -10, left: -10 },
-                            html: `<div class="lint-badge lint-badge-${type}" title="${msg}"><i class="fa fa-exclamation-triangle"></i></div>`,
+                            html: `< div class="lint-badge lint-badge-${type}" title = "${msg}" > <i class="fa fa-exclamation-triangle"></i></div > `,
                             type: 'lint-overlay'
                         });
                     }
@@ -418,6 +433,20 @@ window.BpmnModeler = (function () {
                             backgroundColor: element.di.get('fill') || '#ffffff',
                             formId: bo.get('formId') || ''
                         };
+                    } else if (selection.length === 0) {
+                        // If nothing selected, return process info
+                        const elementRegistry = modeler.get('elementRegistry');
+                        const processElement = elementRegistry.filter(e => e.type === 'bpmn:Process')[0];
+                        if (processElement) {
+                            const bo = processElement.businessObject;
+                            elementData = {
+                                id: processElement.id,
+                                type: 'bpmn:Process',
+                                name: bo.name || '',
+                                isExecutable: bo.isExecutable !== false,
+                                camundaKey: bo.id
+                            };
+                        }
                     }
 
                     dotNetReference.invokeMethodAsync('OnExternalSelectionChanged', elementData);
@@ -461,6 +490,40 @@ window.BpmnModeler = (function () {
                 return { success: true };
             } catch (e) {
                 console.error("Error updating element property:", e);
+                return { success: false, error: e.message };
+            }
+        },
+        updateProcessProperty: function (key, value) {
+            if (!modeler) return { success: false, error: "Modeler not initialized" };
+            try {
+                const elementRegistry = modeler.get('elementRegistry');
+                const modeling = modeler.get('modeling');
+
+                // Find the process element
+                const processElement = elementRegistry.filter(e => e.type === 'bpmn:Process')[0];
+                if (!processElement) return { success: false, error: "Process element not found" };
+
+                const props = {};
+                props[key] = value;
+
+                if (key === 'id') {
+                    // Updating ID is tricky in bpmn-js as it affects plane references
+                    // But modeling.updateProperties(processElement, { id: value }) should handle it if recent version
+                    modeling.updateProperties(processElement, { id: value });
+
+                    // Also need to update the BPMNPlane reference
+                    const definitions = modeler.getDefinitions();
+                    const diagrams = definitions.diagrams;
+                    if (diagrams && diagrams.length > 0) {
+                        diagrams[0].plane.bpmnElement = processElement.businessObject;
+                    }
+                } else {
+                    modeling.updateProperties(processElement, props);
+                }
+
+                return { success: true };
+            } catch (e) {
+                console.error("Error updating process property:", e);
                 return { success: false, error: e.message };
             }
         },
@@ -564,9 +627,9 @@ window.BpmnModeler = (function () {
         showSimulationOverlay: function (elementId) {
             const overlays = modeler.get('overlays');
             const html = `
-                <div class="sim-overlay-content" style="background: #4facfe; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; pointer-events: auto; cursor: pointer;">
-                    Executing... <i class="fa fa-play"></i>
-                </div>`;
+    < div class="sim-overlay-content" style = "background: #4facfe; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; pointer-events: auto; cursor: pointer;" >
+        Executing... <i class="fa fa-play"></i>
+                </div > `;
 
             overlays.add(elementId, 'sim-overlay', {
                 position: { bottom: 0, right: 0 },
@@ -686,8 +749,52 @@ window.BpmnModeler = (function () {
             modeler.on('commandStack.changed', () => {
                 dotNetReference.invokeMethodAsync('OnCommandStackChanged');
             });
+        },
+
+        applyHeatmap: function (stats) {
+            if (!modeler) return;
+            const overlays = modeler.get('overlays');
+            this.clearHeatmap();
+
+            stats.forEach(stat => {
+                const count = stat.instances;
+                if (count === 0) return;
+
+                // Determine color based on count (simple gradient)
+                let color = '#4facfe'; // Blue
+                if (count > 100) color = '#f59e0b'; // Amber
+                if (count > 500) color = '#ef4444'; // Red
+
+                const html = `
+    < div class="heatmap-badge" style = "
+background: ${color};
+color: white;
+padding: 2px 8px;
+border - radius: 10px;
+font - size: 11px;
+font - weight: bold;
+box - shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+pointer - events: none;
+white - space: nowrap;
+">
+                        ${count}
+                    </div >
+    `;
+
+                overlays.add(stat.activityId, 'heatmap', {
+                    position: {
+                        bottom: 0,
+                        right: 0
+                    },
+                    html: html
+                });
+            });
+        },
+
+        clearHeatmap: function () {
+            if (!modeler) return;
+            const overlays = modeler.get('overlays');
+            overlays.remove({ type: 'heatmap' });
         }
     };
 })();
-
-

@@ -1,4 +1,4 @@
-@page "/workflow-editor"
+ @page "/workflow-editor"
 @page "/workflow-editor/{WorkflowId:guid}"
 @using BpmnWorkflow.Client.Services
 @using BpmnWorkflow.Client.Models
@@ -18,6 +18,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BpmnWorkflow.Client.Services.PowerPointExportService PowerPointService
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject CamundaClientService CamundaService
 @implements IAsyncDisposable
 
 <PageTitle>BPMN Editor</PageTitle>
@@ -103,9 +104,19 @@
 
                     <RadzenButton Icon="check_circle" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Warning" 
                                   Click="@ValidateAsync" title="Validate Diagram" Text="Check Rules" />
+
+                    <RadzenButton Icon="local_fire_department" Size="ButtonSize.Small" 
+                                  ButtonStyle="@(_isHeatmapEnabled ? ButtonStyle.Danger : ButtonStyle.Light)" 
+                                  Click="@ToggleHeatmap" title="Toggle Execution Heatmap" Text="Heatmap" />
                     
                     <RadzenButton Icon="help_outline" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" 
                                   Click="@ShowKeyboardShortcuts" title="Keyboard Shortcuts" Text="Shortcuts" />
+                    
+                    @if (WorkflowId.HasValue)
+                    {
+                        <div style="width: 1px; height: 24px; background: #ddd; margin: 0 0.5rem;"></div>
+                        <BpmnWorkflow.Client.Components.Camunda.DeployToCamundaButton WorkflowId="@WorkflowId.Value" />
+                    }
 
                     <div style="flex: 1;"></div>
                     
@@ -119,6 +130,21 @@
                     {
                         <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.7); display:flex; align-items:center; justify-content:center; z-index:100;">
                             <RadzenProgressBarCircular Mode="ProgressBarMode.Indeterminate" />
+                        </div>
+                    }
+                    
+                    @if (!_isProcessExecutable && !_isLoading)
+                    {
+                        <div style="position:absolute; top:0; left:0; right:0; z-index:10; background: #fffde7; border-bottom: 2px solid #fff59d; padding: 0.5rem 1rem;">
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                                    <RadzenIcon Icon="warning" Style="color: #fbc02d;" />
+                                    <RadzenText TextStyle="TextStyle.Body2" Style="margin: 0; color: #5d4037;">
+                                        <strong>Camunda Settings:</strong> This process is <strong>NOT executable</strong> and won't appear in Camunda Cockpit.
+                                    </RadzenText>
+                                </RadzenStack>
+                                <RadzenButton Text="Make Executable" Icon="done" Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Warning" Click="@FixProcessExecutable" />
+                            </RadzenStack>
                         </div>
                     }
 
@@ -400,6 +426,29 @@
                                         }
                                     </RadzenStack>
                                 </RadzenTabsItem>
+                                <RadzenTabsItem Text="Process Settings" Icon="settings">
+                                    <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
+                                        @if (_selectedElement != null && _selectedElement.Type == "bpmn:Process")
+                                        {
+                                            <div>
+                                                <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Process ID (Camunda Key)</RadzenText>
+                                                <RadzenTextBox Value="@_selectedElement.CamundaKey" Change="@(args => UpdateProperty("camundaKey", args))" Style="width:100%" />
+                                                <RadzenText TextStyle="TextStyle.Caption" Style="color: #aaa; font-size: 0.7rem;">This is the key used in Camunda to identify the process.</RadzenText>
+                                            </div>
+                                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                <RadzenText TextStyle="TextStyle.Subtitle2" Style="margin-bottom: 0;">Executable</RadzenText>
+                                                <RadzenCheckBox TValue="bool" Value="@_selectedElement.IsExecutable" Change="@(args => UpdateProperty("isExecutable", args.ToString()))" />
+                                            </div>
+                                            <RadzenAlert Severity="Severity.Warning" AllowClose="false" Size="AlertSize.Small" Visible="@(!_selectedElement.IsExecutable)">
+                                                Non-executable processes will not appear in Camunda platform.
+                                            </RadzenAlert>
+                                        }
+                                        else
+                                        {
+                                            <RadzenText Style="color: #aaa; font-style: italic;">Select the background to edit process settings.</RadzenText>
+                                        }
+                                    </RadzenStack>
+                                </RadzenTabsItem>
                                 <RadzenTabsItem Text="Collaboration" Icon="chat">
                                     <RadzenStack Gap="1rem" Style="padding-top: 1rem;">
                                         <div style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
@@ -556,6 +605,8 @@
     private bool _isPropertiesVisible = true;
     private bool _isSimulating = false;
     private bool _isDiffMode = false;
+    private bool _isHeatmapEnabled = false;
+    private bool _isProcessExecutable = true;
     private WorkflowDto? _workflow;
     private DiagramStatsDto? _diagramStats;
     private System.Timers.Timer? _autoSaveTimer;
@@ -800,6 +851,17 @@
         if (element == null)
         {
             _diagramStats = await BpmnInterop.GetDiagramStatisticsAsync();
+            // Try to find process info to update _isProcessExecutable
+            var elements = await BpmnInterop.GetDiagramElementsAsync();
+            var process = elements.FirstOrDefault(e => e.Type == "bpmn:Process");
+            if (process != null)
+            {
+                _isProcessExecutable = process.IsExecutable;
+            }
+        }
+        else if (element.Type == "bpmn:Process")
+        {
+            _isProcessExecutable = element.IsExecutable;
         }
         StateHasChanged();
     }
@@ -820,9 +882,37 @@
             else if (key == "condition") _selectedElement.Condition = value;
             else if (key == "color") _selectedElement.Color = value;
             else if (key == "backgroundColor") _selectedElement.BackgroundColor = value;
+            else if (key == "isExecutable") _selectedElement.IsExecutable = bool.Parse(value);
+            else if (key == "camundaKey") _selectedElement.CamundaKey = value;
 
-            await BpmnInterop.UpdateElementPropertyAsync(_selectedElement.Id, key, value);
+            if (_selectedElement.Type == "bpmn:Process")
+            {
+                await BpmnInterop.UpdateProcessPropertyAsync(key == "camundaKey" ? "id" : key, value);
+                if (key == "isExecutable")
+                {
+                    _isProcessExecutable = bool.Parse(value);
+                }
+            }
+            else
+            {
+                await BpmnInterop.UpdateElementPropertyAsync(_selectedElement.Id, key, value);
+            }
         }
+    }
+
+    private async Task FixProcessExecutable()
+    {
+        await BpmnInterop.UpdateProcessPropertyAsync("isExecutable", "true");
+        _isProcessExecutable = true;
+        
+        // If the process is currently selected, update the UI element as well
+        if (_selectedElement != null && _selectedElement.Type == "bpmn:Process")
+        {
+            _selectedElement.IsExecutable = true;
+        }
+        
+        NotificationService.Notify(NotificationSeverity.Success, "Fixed", "Process is now executable.");
+        StateHasChanged();
     }
 
 
@@ -1279,6 +1369,52 @@
             await BpmnInterop.ShowDiffAsync(versionXml, currentXml);
             NotificationService.Notify(NotificationSeverity.Info, "Diff Mode Active", "Highlights show differences relative to the selected version.");
         }
+    }
+
+    private async Task ToggleHeatmap()
+    {
+        if (_isHeatmapEnabled)
+        {
+            await BpmnInterop.ClearHeatmapAsync();
+            _isHeatmapEnabled = false;
+        }
+        else
+        {
+            // Get process key from diagram
+            var elements = await BpmnInterop.GetDiagramElementsAsync();
+            var process = elements.FirstOrDefault(e => e.Type == "bpmn:Process");
+            if (process == null || string.IsNullOrEmpty(process.CamundaKey))
+            {
+                NotificationService.Notify(NotificationSeverity.Warning, "Heatmap", "Could not identify process key for heatmap.");
+                return;
+            }
+
+            // Find matching process definition in Camunda
+            var definitions = await CamundaService.GetProcessDefinitionsAsync();
+            var latestDef = definitions
+                .Where(d => d.Key == process.CamundaKey)
+                .OrderByDescending(d => d.Version)
+                .FirstOrDefault();
+
+            if (latestDef == null)
+            {
+                NotificationService.Notify(NotificationSeverity.Warning, "Heatmap", "Process definition not found in Camunda. Deploy it first.");
+                return;
+            }
+
+            // Fetch statistics
+            var stats = await CamundaService.GetProcessDefinitionStatisticsAsync(latestDef.Id);
+            if (stats == null || !stats.Any())
+            {
+                NotificationService.Notify(NotificationSeverity.Info, "Heatmap", "No execution history found for this process.");
+                return;
+            }
+
+            await BpmnInterop.ApplyHeatmapAsync(stats);
+            _isHeatmapEnabled = true;
+            NotificationService.Notify(NotificationSeverity.Success, "Heatmap Active", $"Showing statistics for version {latestDef.Version}.");
+        }
+        StateHasChanged();
     }
 
     private async Task ExitDiffMode()

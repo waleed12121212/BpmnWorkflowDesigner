@@ -1,0 +1,209 @@
+@page "/camunda/environments"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@using BpmnWorkflow.Client.Components.Camunda
+@using Microsoft.AspNetCore.Authorization
+@inject CamundaEnvironmentClientService EnvService
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+@attribute [Authorize]
+
+<PageTitle>Camunda Environments | BPMN Designer</PageTitle>
+
+<div class="container-fluid p-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col">
+            <h1 class="display-5 fw-bold mb-0">Camunda Environments</h1>
+            <p class="text-muted">Manage multiple Camunda server instances and switch between them seamlessly.</p>
+        </div>
+        <div class="col-auto">
+            <RadzenButton Text="Add Environment" Icon="add" ButtonStyle="ButtonStyle.Primary" Click="@AddEnvironment" />
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+            <RadzenProgressBarCircular Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+        </div>
+    }
+    else if (!_environments.Any())
+    {
+        <RadzenAlert Title="No Environments Configured" AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+            You haven't added any Camunda environments yet. Click the "Add Environment" button to get started. 
+            The system needs at least one environment to connect to Camunda.
+        </RadzenAlert>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var env in _environments)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <RadzenCard class="@(env.IsActive ? "env-card border-primary" : "env-card")">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h3 class="h5 fw-bold mb-1">@env.Name</h3>
+                                <span class="badge @(env.IsActive ? "bg-primary" : "bg-light text-dark")">
+                                    @(env.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => EditEnvironment(env))" />
+                                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Variant="Variant.Outlined" Click="@(() => DeleteEnvironment(env))" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">Base URL</small>
+                            <code class="text-primary truncate-url">@env.BaseUrl</code>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(env.Description))
+                        {
+                            <p class="small text-muted mb-3 text-truncate-3">@env.Description</p>
+                        }
+
+                        <div class="mt-auto">
+                            @if (!env.IsActive)
+                            {
+                                <RadzenButton Text="Set as Active" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => ActivateEnvironment(env))" class="p-0" />
+                            }
+                            else
+                            {
+                                <span class="text-success small fw-bold">
+                                    <RadzenIcon Icon="check_circle" Size="14px" class="me-1" /> Currently Connected
+                                </span>
+                            }
+                        </div>
+                    </RadzenCard>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .env-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 2px solid transparent;
+    }
+    .env-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .truncate-url {
+        max-width: 100%;
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .text-truncate-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+
+@code {
+    private List<CamundaEnvironmentDto> _environments = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEnvironments();
+    }
+
+    private async Task LoadEnvironments()
+    {
+        _isLoading = true;
+        try
+        {
+            _environments = await EnvService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to load environments.");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AddEnvironment()
+    {
+        var result = await DialogService.OpenAsync<CamundaEnvironmentDialog>("Add Camunda Environment");
+
+        if (result is CamundaEnvironmentUpsertDto dto)
+        {
+            var env = await EnvService.CreateAsync(dto);
+            if (env != null)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", "Environment added successfully.");
+                await LoadEnvironments();
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to add environment.");
+            }
+        }
+    }
+
+    private async Task EditEnvironment(CamundaEnvironmentDto env)
+    {
+        var result = await DialogService.OpenAsync<CamundaEnvironmentDialog>($"Edit {env.Name}", 
+            new Dictionary<string, object> { { "Environment", env } });
+
+        if (result is CamundaEnvironmentUpsertDto dto)
+        {
+            var updated = await EnvService.UpdateAsync(env.Id, dto);
+            if (updated != null)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", "Environment updated successfully.");
+                await LoadEnvironments();
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to update environment.");
+            }
+        }
+    }
+
+    private async Task DeleteEnvironment(CamundaEnvironmentDto env)
+    {
+        var confirm = await DialogService.Confirm($"Are you sure you want to delete environment '{env.Name}'?", "Confirm Delete");
+        if (confirm == true)
+        {
+            var success = await EnvService.DeleteAsync(env.Id);
+            if (success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", "Environment deleted successfully.");
+                await LoadEnvironments();
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to delete environment. You cannot delete the active environment if there are other environments available.");
+            }
+        }
+    }
+
+    private async Task ActivateEnvironment(CamundaEnvironmentDto env)
+    {
+        var success = await EnvService.ActivateAsync(env.Id);
+        if (success)
+        {
+            NotificationService.Notify(NotificationSeverity.Success, "Environment Switched", $"Now connected to {env.Name}");
+            await LoadEnvironments();
+        }
+        else
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to switch environment.");
+        }
+    }
+}

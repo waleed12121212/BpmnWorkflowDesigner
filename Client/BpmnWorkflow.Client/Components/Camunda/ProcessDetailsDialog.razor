@@ -1,0 +1,264 @@
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NotificationService NotificationService
+@inject IJSRuntime JsRuntime
+
+<RadzenTabs>
+    <Tabs>
+        <RadzenTabsItem Text="Overview">
+            <RadzenStack Gap="1rem" class="rz-p-4">
+                <RadzenCard>
+                    <RadzenStack Gap="0.5rem">
+                        <RadzenText TextStyle="TextStyle.Subtitle1">Process Instance Information</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2"><strong>Instance ID:</strong> @ProcessInstance.Id</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2"><strong>Process Definition:</strong> @ProcessInstance.ProcessDefinitionKey</RadzenText>
+                        @if (!string.IsNullOrEmpty(ProcessInstance.BusinessKey))
+                        {
+                            <RadzenText TextStyle="TextStyle.Body2"><strong>Business Key:</strong> @ProcessInstance.BusinessKey</RadzenText>
+                        }
+                        <RadzenText TextStyle="TextStyle.Body2">
+                            <strong>Status:</strong> 
+                            <RadzenBadge BadgeStyle="@GetBadgeStyle(ProcessInstance.StatusColor)" Text="@ProcessInstance.StatusText" />
+                        </RadzenText>
+                        @if (ProcessInstance.StartTime.HasValue)
+                        {
+                            <RadzenText TextStyle="TextStyle.Body2"><strong>Started:</strong> @ProcessInstance.StartTime.Value.ToString("yyyy-MM-dd HH:mm:ss")</RadzenText>
+                        }
+                        @if (ProcessInstance.EndTime.HasValue)
+                        {
+                            <RadzenText TextStyle="TextStyle.Body2"><strong>Ended:</strong> @ProcessInstance.EndTime.Value.ToString("yyyy-MM-dd HH:mm:ss")</RadzenText>
+                        }
+                    </RadzenStack>
+                </RadzenCard>
+            </RadzenStack>
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="Variables">
+            <RadzenStack Gap="1rem" class="rz-p-4">
+                @if (isLoadingVariables)
+                {
+                    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                }
+                else if (processVariables.Any())
+                {
+                    <RadzenDataGrid Data="@processVariables" TItem="KeyValuePair<string, object>" AllowPaging="true" PageSize="10">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="KeyValuePair<string, object>" Property="Key" Title="Variable Name" Width="200px" />
+                            <RadzenDataGridColumn TItem="KeyValuePair<string, object>" Property="Value" Title="Value">
+                                <Template Context="variable">
+                                    <RadzenText TextStyle="TextStyle.Body2">@variable.Value?.ToString()</RadzenText>
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                }
+                else
+                {
+                    <RadzenText TextStyle="TextStyle.Body2" class="rz-color-secondary">No variables found</RadzenText>
+                }
+            </RadzenStack>
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="Activity Tree">
+            <RadzenStack Gap="1rem" class="rz-p-4">
+                @if (isLoadingActivity)
+                {
+                    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                }
+                else if (activityInstance != null)
+                {
+                    <RadzenTree Data="@GetTreeData()">
+                        <RadzenTreeLevel TextProperty="Text"
+                                         ChildrenProperty="Children"
+                                         HasChildren="@(e => (e as TreeNode)?.Children?.Any() == true)" />
+                    </RadzenTree>
+                }
+                else
+                {
+                    <RadzenText TextStyle="TextStyle.Body2" class="rz-color-secondary">No activity information available</RadzenText>
+                }
+            </RadzenStack>
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="Diagram">
+            <RadzenStack Gap="1rem" class="rz-p-0" Style="height: 600px; position: relative;">
+                @if (isLoadingDiagram)
+                {
+                    <RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center" Style="height: 100%;">
+                        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                        <RadzenText TextStyle="TextStyle.Caption">Loading diagram...</RadzenText>
+                    </RadzenStack>
+                }
+                <div id="process-viewer-container" style="width: 100%; height: 100%; background: #f8f9fa;"></div>
+                
+                <div style="position: absolute; bottom: 1rem; right: 1rem; background: rgba(255,255,255,0.8); padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; display: flex; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="width: 12px; height: 12px; border-radius: 50%; background: var(--rz-primary);"></span>
+                        <RadzenText TextStyle="TextStyle.Caption">Active</RadzenText>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="width: 12px; height: 12px; border-radius: 50%; background: var(--rz-success);"></span>
+                        <RadzenText TextStyle="TextStyle.Caption">Completed</RadzenText>
+                    </div>
+                </div>
+            </RadzenStack>
+        </RadzenTabsItem>
+    </Tabs>
+</RadzenTabs>
+
+@code {
+    [Parameter]
+    public ProcessInstanceDto ProcessInstance { get; set; } = new();
+
+    private Dictionary<string, object> processVariables = new();
+    private ActivityInstanceDto? activityInstance;
+    private List<ActivityInstanceDto> historyActivities = new();
+    private string? bpmnXml;
+    private bool isLoadingVariables = true;
+    private bool isLoadingActivity = true;
+    private bool isLoadingDiagram = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            LoadProcessVariables(),
+            LoadActivityInstance(),
+            LoadHistoryActivities(),
+            LoadDiagramXml()
+        );
+    }
+
+    private async Task LoadDiagramXml()
+    {
+        isLoadingDiagram = true;
+        try
+        {
+            bpmnXml = await CamundaService.GetProcessDefinitionXmlAsync(ProcessInstance.ProcessDefinitionId);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", $"Could not load diagram: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingDiagram = false;
+        }
+    }
+
+    private async Task LoadHistoryActivities()
+    {
+        try
+        {
+            historyActivities = await CamundaService.GetHistoryActivitiesAsync(ProcessInstance.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history activities: {ex.Message}");
+        }
+    }
+
+    private async Task LoadProcessVariables()
+    {
+        isLoadingVariables = true;
+        try
+        {
+            processVariables = await CamundaService.GetProcessVariablesAsync(ProcessInstance.Id);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", $"Could not load variables: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingVariables = false;
+        }
+    }
+
+    private async Task LoadActivityInstance()
+    {
+        isLoadingActivity = true;
+        try
+        {
+            activityInstance = await CamundaService.GetActivityInstanceAsync(ProcessInstance.Id);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", $"Could not load activity tree: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingActivity = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoadingDiagram && !string.IsNullOrEmpty(bpmnXml))
+        {
+            await Task.Delay(100); // Small delay for tab switch
+            await JsRuntime.InvokeVoidAsync("BpmnViewer.initialize", "process-viewer-container");
+            await JsRuntime.InvokeVoidAsync("BpmnViewer.importXML", bpmnXml);
+            
+            var activeIds = new List<string>();
+            ExtractActiveIds(activityInstance, activeIds);
+            
+            var completedIds = historyActivities.Select(a => a.ActivityId).ToList();
+            
+            await JsRuntime.InvokeVoidAsync("BpmnViewer.highlightActivities", activeIds, completedIds);
+        }
+    }
+
+    private void ExtractActiveIds(ActivityInstanceDto? activity, List<string> ids)
+    {
+        if (activity == null) return;
+        
+        // Root process instance activity is usually the definition key, we want actual task/event IDs
+        if (activity.ActivityType != "process-definition")
+        {
+            ids.Add(activity.ActivityId);
+        }
+
+        if (activity.ChildActivityInstances != null)
+        {
+            foreach (var child in activity.ChildActivityInstances)
+            {
+                ExtractActiveIds(child, ids);
+            }
+        }
+    }
+
+    private List<TreeNode> GetTreeData()
+    {
+        if (activityInstance == null) return new List<TreeNode>();
+        
+        return new List<TreeNode> { ConvertToTreeNode(activityInstance) };
+    }
+
+    private TreeNode ConvertToTreeNode(ActivityInstanceDto activity)
+    {
+        return new TreeNode
+        {
+            Text = $"{activity.ActivityName} ({activity.ActivityType})",
+            Children = activity.ChildActivityInstances?.Select(ConvertToTreeNode).ToList()
+        };
+    }
+
+    private BadgeStyle GetBadgeStyle(string color)
+    {
+        return color switch
+        {
+            "success" => BadgeStyle.Success,
+            "warning" => BadgeStyle.Warning,
+            "info" => BadgeStyle.Info,
+            "danger" => BadgeStyle.Danger,
+            _ => BadgeStyle.Secondary
+        };
+    }
+
+    private class TreeNode
+    {
+        public string Text { get; set; } = string.Empty;
+        public List<TreeNode>? Children { get; set; }
+    }
+}

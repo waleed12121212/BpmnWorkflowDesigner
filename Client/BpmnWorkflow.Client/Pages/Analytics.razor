@@ -22,21 +22,27 @@
     else
     {
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <RadzenCard>
-                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Workflows</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Workflows</RadzenText>
                     <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalWorkflows</RadzenText>
                 </RadzenCard>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <RadzenCard>
-                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Users</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Processes Started</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0; color: #4facfe;">@_analytics.TotalProcessInstances</RadzenText>
+                </RadzenCard>
+            </div>
+            <div class="col-md-3">
+                <RadzenCard>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Users</RadzenText>
                     <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalUsers</RadzenText>
                 </RadzenCard>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <RadzenCard>
-                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Total Comments</RadzenText>
+                    <RadzenText TextStyle="TextStyle.H6" Style="color: #888;">Comments</RadzenText>
                     <RadzenText TextStyle="TextStyle.H2" Style="margin: 0.5rem 0;">@_analytics.TotalComments</RadzenText>
                 </RadzenCard>
             </div>

@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database - Shared by both Application and Camunda
+  postgres:
+    image: postgres:15-alpine
+    container_name: bpmn-postgres
+    environment:
+      POSTGRES_DB: BpmnWorkflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      # Create additional database for Camunda
+      POSTGRES_MULTIPLE_DATABASES: BpmnWorkflow,camunda
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
+    networks:
+      - bpmn-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Camunda Platform 7 - Community Edition
+  camunda:
+    image: camunda/camunda-bpm-platform:latest
+    container_name: bpmn-camunda
+    environment:
+      # Database Configuration
+      DB_DRIVER: org.postgresql.Driver
+      DB_URL: jdbc:postgresql://postgres:5432/camunda
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres123
+
+      # Camunda Configuration
+      WAIT_FOR: postgres:5432
+      WAIT_FOR_TIMEOUT: 60
+
+      # Admin User
+      CAMUNDA_BPM_ADMIN_USER_ID: admin
+      CAMUNDA_BPM_ADMIN_USER_PASSWORD: admin
+      CAMUNDA_BPM_ADMIN_USER_FIRST_NAME: Admin
+      CAMUNDA_BPM_ADMIN_USER_LAST_NAME: User
+      CAMUNDA_BPM_ADMIN_USER_EMAIL: admin@bpmn.local
+
+      # Demo User (optional)
+      CAMUNDA_BPM_DEMO_USER_ID: demo
+      CAMUNDA_BPM_DEMO_USER_PASSWORD: demo
+
+      # JVM Options
+      JAVA_OPTS: -Xmx768m -XX:MaxMetaspaceSize=256m
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bpmn-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/camunda/api/engine/engine/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Redis - For caching and session management (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: bpmn-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bpmn-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bpmn-network:
+    driver: bridge

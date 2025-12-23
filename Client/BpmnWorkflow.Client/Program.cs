@@ -65,4 +65,17 @@ builder.Services.AddScoped<PowerPointExportService>();
 builder.Services.AddScoped<IBpmnInteropService, BpmnInteropService>();
 builder.Services.AddScoped<BpmnWorkflow.Client.Services.ThemeService>();
 
+// Camunda Integration Service
+builder.Services.AddScoped<CamundaClientService>(sp => 
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("BpmnWorkflow.API");
+    return new CamundaClientService(httpClient);
+});
+
+builder.Services.AddScoped<CamundaEnvironmentClientService>(sp => 
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("BpmnWorkflow.API");
+    return new CamundaEnvironmentClientService(httpClient);
+});
+
 await builder.Build().RunAsync();

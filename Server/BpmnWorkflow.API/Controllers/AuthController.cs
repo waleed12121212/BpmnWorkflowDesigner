@@ -32,7 +32,14 @@ namespace BpmnWorkflow.API.Controllers
         public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
         {
             var result = await _authService.LoginAsync(request);
-            if (!result.Success) return Unauthorized(result.Message);
+            if (!result.Success)
+            {
+                if (result.Message.StartsWith("SERVER_ERROR"))
+                {
+                    return StatusCode(500, new { error = "Internal Server Error", details = result.Message });
+                }
+                return Unauthorized(new { error = "Unauthorized", message = result.Message });
+            }
             return Ok(result);
         }
     }

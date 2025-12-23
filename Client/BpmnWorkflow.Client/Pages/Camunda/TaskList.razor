@@ -1,0 +1,368 @@
+@page "/camunda/tasks"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Task List - Camunda</PageTitle>
+
+<RadzenStack Gap="1rem">
+    <RadzenRow AlignItems="AlignItems.Center">
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenText TextStyle="TextStyle.H3" TagName="TagName.H1" class="rz-mb-0">
+                <RadzenIcon Icon="task" /> My Tasks
+            </RadzenText>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6" class="rz-text-align-end">
+            <RadzenButton Icon="refresh" Text="Refresh" Click="@LoadTasks" Variant="Variant.Flat" />
+        </RadzenColumn>
+    </RadzenRow>
+
+    @* Statistics Cards *@
+    <RadzenRow>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-info-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="assignment" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@myTasksCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">My Tasks</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-warning-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="assignment_ind" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@unassignedTasksCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Unassigned</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-danger-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="schedule" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@overdueTasksCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Overdue</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-base-200">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="list_alt" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@totalTasksCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Total</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+    </RadzenRow>
+
+    @* Filters *@
+    <RadzenCard>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" Wrap="FlexWrap.Wrap">
+            <RadzenLabel Text="Show:" />
+            <RadzenDropDown @bind-Value="@selectedFilter" Data="@filterOptions" 
+                           Change="@ApplyFilters" Style="width: 200px;" />
+            
+            <RadzenLabel Text="Priority:" />
+            <RadzenDropDown @bind-Value="@selectedPriority" Data="@priorityOptions" 
+                           AllowClear="true" Placeholder="All Priorities"
+                           Change="@ApplyFilters" Style="width: 150px;" />
+            
+            <RadzenCheckBox @bind-Value="@showOverdueOnly" Name="overdueOnly" />
+            <RadzenLabel Text="Overdue Only" Component="overdueOnly" Style="cursor: pointer;" />
+        </RadzenStack>
+    </RadzenCard>
+
+    @* Tasks Grid *@
+    <RadzenCard>
+        @if (isLoading)
+        {
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" class="rz-p-12">
+                <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                <RadzenText>Loading tasks...</RadzenText>
+            </RadzenStack>
+        }
+        else if (!filteredTasks.Any())
+        {
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" class="rz-p-12">
+                <RadzenIcon Icon="inbox" Style="font-size: 4rem; opacity: 0.3;" />
+                <RadzenText TextStyle="TextStyle.H6">No tasks found</RadzenText>
+                <RadzenText>@GetEmptyMessage()</RadzenText>
+            </RadzenStack>
+        }
+        else
+        {
+            <RadzenDataGrid Data="@filteredTasks" TItem="UserTaskDto" 
+                           AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="15"
+                           FilterMode="FilterMode.Simple" class="rz-mt-4">
+                <Columns>
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="Name" Title="Task Name" Width="250px">
+                        <Template Context="task">
+                            <RadzenStack Gap="0.25rem">
+                                <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mb-0">@task.Name</RadzenText>
+                                @if (!string.IsNullOrEmpty(task.Description))
+                                {
+                                    <RadzenText TextStyle="TextStyle.Caption" class="rz-color-secondary">@task.Description</RadzenText>
+                                }
+                            </RadzenStack>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="ProcessInstanceId" Title="Process Instance" Width="150px">
+                        <Template Context="task">
+                            <RadzenText TextStyle="TextStyle.Body2" class="rz-font-family-monospace">
+                                @task.ProcessInstanceId.Substring(0, Math.Min(10, task.ProcessInstanceId.Length))...
+                            </RadzenText>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="Assignee" Title="Assignee" Width="120px">
+                        <Template Context="task">
+                            @if (task.IsAssigned)
+                            {
+                                <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@task.Assignee" />
+                            }
+                            else
+                            {
+                                <RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Unassigned" />
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="PriorityText" Title="Priority" Width="100px">
+                        <Template Context="task">
+                            <RadzenBadge BadgeStyle="@GetPriorityBadgeStyle(task.PriorityColor)" Text="@task.PriorityText" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="Created" Title="Created" Width="150px" FormatString="{0:yyyy-MM-dd HH:mm}" />
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Property="Due" Title="Due Date" Width="150px">
+                        <Template Context="task">
+                            @if (task.Due.HasValue)
+                            {
+                                <RadzenStack Gap="0.25rem">
+                                    <RadzenText TextStyle="TextStyle.Body2">@task.Due.Value.ToString("yyyy-MM-dd HH:mm")</RadzenText>
+                                    @if (task.IsOverdue)
+                                    {
+                                        <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="Overdue" />
+                                    }
+                                </RadzenStack>
+                            }
+                            else
+                            {
+                                <RadzenText TextStyle="TextStyle.Body2" class="rz-color-secondary">-</RadzenText>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="UserTaskDto" Title="Actions" Width="250px" Sortable="false" Filterable="false">
+                        <Template Context="task">
+                            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                                @if (task.Assignee == currentUserId)
+                                {
+                                    <RadzenButton Icon="check_circle" Text="Complete" Size="ButtonSize.Small" 
+                                                ButtonStyle="ButtonStyle.Success"
+                                                Click="@(() => CompleteTask(task))" />
+                                    <RadzenButton Icon="person_remove" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                Click="@(() => UnclaimTask(task))" 
+                                                title="Unclaim" />
+                                }
+                                else if (!task.IsAssigned)
+                                {
+                                    <RadzenButton Icon="person_add" Text="Claim" Size="ButtonSize.Small" 
+                                                ButtonStyle="ButtonStyle.Primary"
+                                                Click="@(() => ClaimTask(task))" />
+                                }
+                                <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                            Click="@(() => ViewTaskDetails(task))" 
+                                            title="View Details" />
+                            </RadzenStack>
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+</RadzenStack>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ProcessInstanceId { get; set; }
+
+    private List<UserTaskDto> allTasks = new();
+    private List<UserTaskDto> filteredTasks = new();
+    private bool isLoading = true;
+    private string currentUserId = string.Empty;
+    
+    private string selectedFilter = "My Tasks";
+    private List<string> filterOptions = new() { "My Tasks", "Unassigned", "All Tasks" };
+    
+    private string? selectedPriority;
+    private List<string> priorityOptions = new() { "High", "Medium", "Low", "Very Low" };
+    
+    private bool showOverdueOnly = false;
+
+    private int totalTasksCount => allTasks.Count;
+    private int myTasksCount => allTasks.Count(t => t.Assignee == currentUserId);
+    private int unassignedTasksCount => allTasks.Count(t => !t.IsAssigned);
+    private int overdueTasksCount => allTasks.Count(t => t.IsOverdue);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetCurrentUser();
+        await LoadTasks();
+    }
+
+    private async Task GetCurrentUser()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.Identity?.Name ?? "demo";
+    }
+
+    private async Task LoadTasks()
+    {
+        isLoading = true;
+        try
+        {
+            if (!string.IsNullOrEmpty(ProcessInstanceId))
+            {
+                allTasks = await CamundaService.GetUserTasksAsync(processInstanceId: ProcessInstanceId);
+            }
+            else
+            {
+                allTasks = await CamundaService.GetUserTasksAsync();
+            }
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to load tasks: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredTasks = allTasks;
+
+        // Apply filter
+        filteredTasks = selectedFilter switch
+        {
+            "My Tasks" => filteredTasks.Where(t => t.Assignee == currentUserId).ToList(),
+            "Unassigned" => filteredTasks.Where(t => !t.IsAssigned).ToList(),
+            _ => filteredTasks
+        };
+
+        // Apply priority filter
+        if (!string.IsNullOrEmpty(selectedPriority))
+        {
+            filteredTasks = filteredTasks.Where(t => t.PriorityText == selectedPriority).ToList();
+        }
+
+        // Apply overdue filter
+        if (showOverdueOnly)
+        {
+            filteredTasks = filteredTasks.Where(t => t.IsOverdue).ToList();
+        }
+    }
+
+    private async Task ClaimTask(UserTaskDto task)
+    {
+        try
+        {
+            var success = await CamundaService.ClaimTaskAsync(task.Id, currentUserId);
+            if (success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", $"Task '{task.Name}' claimed successfully");
+                await LoadTasks();
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to claim task");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to claim task: {ex.Message}");
+        }
+    }
+
+    private async Task UnclaimTask(UserTaskDto task)
+    {
+        try
+        {
+            var success = await CamundaService.UnclaimTaskAsync(task.Id);
+            if (success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", $"Task '{task.Name}' unclaimed successfully");
+                await LoadTasks();
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to unclaim task");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to unclaim task: {ex.Message}");
+        }
+    }
+
+    private async Task CompleteTask(UserTaskDto task)
+    {
+        var result = await DialogService.OpenAsync<CompleteTaskDialog>($"Complete Task: {task.Name}",
+            new Dictionary<string, object> { { "Task", task } },
+            new DialogOptions { Width = "600px" });
+
+        if (result != null)
+        {
+            await LoadTasks();
+        }
+    }
+
+    private async Task ViewTaskDetails(UserTaskDto task)
+    {
+        await DialogService.OpenAsync<TaskDetailsDialog>($"Task Details: {task.Name}",
+            new Dictionary<string, object> { { "Task", task } },
+            new DialogOptions { Width = "700px", Height = "500px" });
+    }
+
+    private BadgeStyle GetPriorityBadgeStyle(string color)
+    {
+        return color switch
+        {
+            "danger" => BadgeStyle.Danger,
+            "warning" => BadgeStyle.Warning,
+            "info" => BadgeStyle.Info,
+            _ => BadgeStyle.Secondary
+        };
+    }
+
+    private string GetEmptyMessage()
+    {
+        return selectedFilter switch
+        {
+            "My Tasks" => "You don't have any assigned tasks at the moment.",
+            "Unassigned" => "There are no unassigned tasks available.",
+            _ => "No tasks found matching your filters."
+        };
+    }
+}

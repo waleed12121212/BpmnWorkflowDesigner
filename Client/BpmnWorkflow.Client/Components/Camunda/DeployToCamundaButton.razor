@@ -1,0 +1,85 @@
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NotificationService NotificationService
+
+<RadzenSplitButton Icon="cloud_upload" Text="@buttonText" Click="@DeployToCamunda" 
+                  ButtonStyle="ButtonStyle.Success" Disabled="@(isDeploying || WorkflowId == Guid.Empty)">
+    <ChildContent>
+        <RadzenSplitButtonItem Text="Deploy to Camunda" Value="deploy" Icon="cloud_upload" />
+        <RadzenSplitButtonItem Text="View in Cockpit" Value="cockpit" Icon="open_in_new" />
+        <RadzenSplitButtonItem Text="Start Process" Value="start" Icon="play_arrow" />
+    </ChildContent>
+</RadzenSplitButton>
+
+@if (isDeploying)
+{
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" 
+                              Size="ProgressBarCircularSize.Small" class="rz-ml-2" />
+}
+
+@code {
+    [Parameter]
+    public Guid WorkflowId { get; set; }
+
+    [Parameter]
+    public EventCallback OnDeploySuccess { get; set; }
+
+    private bool isDeploying = false;
+    private string? deploymentId;
+    private string? processDefinitionKey;
+    private string buttonText = "Deploy to Camunda";
+
+    private async Task DeployToCamunda()
+    {
+        if (WorkflowId == Guid.Empty)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", "Please save the workflow first");
+            return;
+        }
+
+        isDeploying = true;
+        buttonText = "Deploying...";
+
+        try
+        {
+            var result = await CamundaService.DeployWorkflowAsync(WorkflowId);
+            
+            if (result != null)
+            {
+                deploymentId = result.DeploymentId;
+                processDefinitionKey = result.ProcessDefinitionKey;
+                
+                NotificationService.Notify(new NotificationMessage
+                {
+                    Severity = NotificationSeverity.Success,
+                    Summary = "Deployment Successful",
+                    Detail = $"Workflow deployed to Camunda successfully!\nDeployment ID: {result.DeploymentId}\nProcess Key: {result.ProcessDefinitionKey}",
+                    Duration = 8000
+                });
+
+                buttonText = "✓ Deployed";
+                await OnDeploySuccess.InvokeAsync();
+                
+                // Reset button text after 3 seconds
+                await Task.Delay(3000);
+                buttonText = "Deploy to Camunda";
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Error,
+                Summary = "Deployment Failed",
+                Detail = $"Failed to deploy workflow to Camunda: {ex.Message}",
+                Duration = 10000
+            });
+            buttonText = "Deploy to Camunda";
+        }
+        finally
+        {
+            isDeploying = false;
+        }
+    }
+}

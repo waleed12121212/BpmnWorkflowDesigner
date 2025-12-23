@@ -63,6 +63,41 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.CamundaEnvironment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Password")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CamundaEnvironments");
+                });
+
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -267,6 +302,58 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.ToTable("FormVersions");
                 });
 
+            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.ProcessInstance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BusinessKey")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CamundaProcessDefinitionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CamundaProcessInstanceId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EndReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("StartedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StartedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("State")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Variables")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedByUserId");
+
+                    b.HasIndex("WorkflowId");
+
+                    b.ToTable("ProcessInstances");
+                });
+
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -381,6 +468,12 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CamundaDeploymentId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CamundaProcessDefinitionId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -400,8 +493,14 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsDeployed")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastDeployedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -548,6 +647,23 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Form");
+                });
+
+            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.ProcessInstance", b =>
+                {
+                    b.HasOne("BpmnWorkflow.Domain.Entities.User", "StartedByUser")
+                        .WithMany()
+                        .HasForeignKey("StartedByUserId");
+
+                    b.HasOne("BpmnWorkflow.Domain.Entities.Workflow", "Workflow")
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StartedByUser");
+
+                    b.Navigation("Workflow");
                 });
 
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.User", b =>

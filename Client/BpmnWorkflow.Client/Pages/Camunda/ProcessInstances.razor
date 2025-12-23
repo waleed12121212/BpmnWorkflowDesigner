@@ -1,0 +1,285 @@
+@page "/camunda/processes"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+
+<PageTitle>Process Instances - Camunda</PageTitle>
+
+<RadzenStack Gap="1rem">
+    <RadzenRow AlignItems="AlignItems.Center">
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenText TextStyle="TextStyle.H3" TagName="TagName.H1" class="rz-mb-0">
+                <RadzenIcon Icon="play_circle" /> Process Instances
+            </RadzenText>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6" class="rz-text-align-end">
+            <RadzenButton Icon="refresh" Text="Refresh" Click="@LoadProcessInstances" Variant="Variant.Flat" />
+            <RadzenButton Icon="add_circle" Text="Start New Process" Click="@ShowStartProcessDialog" ButtonStyle="ButtonStyle.Primary" />
+        </RadzenColumn>
+    </RadzenRow>
+
+    @* Statistics Cards *@
+    <RadzenRow>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-info-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="play_arrow" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@runningCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Running</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-success-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="check_circle" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@completedCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Completed</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-warning-lighter">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="pause_circle" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@suspendedCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Suspended</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="3">
+            <RadzenCard class="rz-background-color-base-200">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                    <RadzenIcon Icon="list" Style="font-size: 3rem;" />
+                    <RadzenStack Gap="0">
+                        <RadzenText TextStyle="TextStyle.H4" class="rz-mb-0">@totalCount</RadzenText>
+                        <RadzenText TextStyle="TextStyle.Body2">Total</RadzenText>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+    </RadzenRow>
+
+    @* Filters *@
+    <RadzenCard>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" Wrap="FlexWrap.Wrap">
+            <RadzenLabel Text="Filter by Process:" />
+            <RadzenDropDown @bind-Value="@selectedProcessKey" Data="@processDefinitions" 
+                           TextProperty="Name" ValueProperty="Key" 
+                           AllowClear="true" Placeholder="All Processes"
+                           Change="@LoadProcessInstances" Style="width: 300px;" />
+            
+            <RadzenLabel Text="Status:" />
+            <RadzenDropDown @bind-Value="@selectedStatus" Data="@statusOptions" 
+                           AllowClear="true" Placeholder="All Statuses"
+                           Change="@ApplyFilters" Style="width: 150px;" />
+        </RadzenStack>
+    </RadzenCard>
+
+    @* Process Instances Grid *@
+    <RadzenCard>
+        @if (isLoading)
+        {
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" class="rz-p-12">
+                <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+                <RadzenText>Loading process instances...</RadzenText>
+            </RadzenStack>
+        }
+        else if (!filteredInstances.Any())
+        {
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" class="rz-p-12">
+                <RadzenIcon Icon="inbox" Style="font-size: 4rem; opacity: 0.3;" />
+                <RadzenText TextStyle="TextStyle.H6">No process instances found</RadzenText>
+                <RadzenButton Text="Start New Process" Click="@ShowStartProcessDialog" ButtonStyle="ButtonStyle.Primary" />
+            </RadzenStack>
+        }
+        else
+        {
+            <RadzenDataGrid Data="@filteredInstances" TItem="ProcessInstanceDto" 
+                           AllowFiltering="true" AllowSorting="true" AllowPaging="true" PageSize="10"
+                           FilterMode="FilterMode.Simple" class="rz-mt-4">
+                <Columns>
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Property="Id" Title="Instance ID" Width="200px">
+                        <Template Context="instance">
+                            <RadzenText TextStyle="TextStyle.Body2" class="rz-font-family-monospace">
+                                @instance.Id.Substring(0, Math.Min(12, instance.Id.Length))...
+                            </RadzenText>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Property="ProcessDefinitionKey" Title="Process" />
+                    
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Property="BusinessKey" Title="Business Key" />
+                    
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Property="StatusText" Title="Status" Width="120px">
+                        <Template Context="instance">
+                            <RadzenBadge BadgeStyle="@GetBadgeStyle(instance.StatusColor)" Text="@instance.StatusText" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Property="StartTime" Title="Started" Width="180px" FormatString="{0:yyyy-MM-dd HH:mm}" />
+                    
+                    <RadzenDataGridColumn TItem="ProcessInstanceDto" Title="Actions" Width="200px" Sortable="false" Filterable="false">
+                        <Template Context="instance">
+                            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                                <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                            Click="@(() => ViewProcessDetails(instance))" 
+                                            title="View Details" />
+                                <RadzenButton Icon="list" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                            Click="@(() => ViewProcessTasks(instance))" 
+                                            title="View Tasks" />
+                                @if (!instance.Ended)
+                                {
+                                    <RadzenButton Icon="cancel" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat"
+                                                Click="@(() => CancelProcessInstance(instance))" 
+                                                title="Cancel Process" />
+                                }
+                            </RadzenStack>
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+</RadzenStack>
+
+@code {
+    private List<ProcessInstanceDto> processInstances = new();
+    private List<ProcessInstanceDto> filteredInstances = new();
+    private List<ProcessDefinitionDto> processDefinitions = new();
+    private bool isLoading = true;
+    private string? selectedProcessKey;
+    private string? selectedStatus;
+    private List<string> statusOptions = new() { "Running", "Completed", "Suspended" };
+
+    private int totalCount => processInstances.Count;
+    private int runningCount => processInstances.Count(p => !p.Ended && !p.Suspended);
+    private int completedCount => processInstances.Count(p => p.Ended);
+    private int suspendedCount => processInstances.Count(p => p.Suspended);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProcessDefinitions();
+        await LoadProcessInstances();
+    }
+
+    private async Task LoadProcessDefinitions()
+    {
+        try
+        {
+            processDefinitions = await CamundaService.GetProcessDefinitionsAsync();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to load process definitions: {ex.Message}");
+        }
+    }
+
+    private async Task LoadProcessInstances()
+    {
+        isLoading = true;
+        try
+        {
+            processInstances = await CamundaService.GetProcessInstancesAsync(selectedProcessKey);
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to load process instances: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredInstances = processInstances;
+
+        if (!string.IsNullOrEmpty(selectedStatus))
+        {
+            filteredInstances = selectedStatus switch
+            {
+                "Running" => filteredInstances.Where(p => !p.Ended && !p.Suspended).ToList(),
+                "Completed" => filteredInstances.Where(p => p.Ended).ToList(),
+                "Suspended" => filteredInstances.Where(p => p.Suspended).ToList(),
+                _ => filteredInstances
+            };
+        }
+    }
+
+    private async Task ShowStartProcessDialog()
+    {
+        var result = await DialogService.OpenAsync<StartProcessDialog>("Start New Process",
+            new Dictionary<string, object> { { "ProcessDefinitions", processDefinitions } },
+            new DialogOptions { Width = "600px" });
+
+        if (result != null)
+        {
+            await LoadProcessInstances();
+        }
+    }
+
+    private async Task ViewProcessDetails(ProcessInstanceDto instance)
+    {
+        await DialogService.OpenAsync<ProcessDetailsDialog>($"Process Instance: {instance.Id}",
+            new Dictionary<string, object> { { "ProcessInstance", instance } },
+            new DialogOptions { Width = "800px", Height = "600px" });
+    }
+
+    private void ViewProcessTasks(ProcessInstanceDto instance)
+    {
+        Navigation.NavigateTo($"/camunda/tasks?processInstanceId={instance.Id}");
+    }
+
+    private async Task CancelProcessInstance(ProcessInstanceDto instance)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Are you sure you want to cancel process instance '{instance.Id}'?",
+            "Cancel Process Instance",
+            new ConfirmOptions { OkButtonText = "Yes, Cancel", CancelButtonText = "No" });
+
+        if (confirmed == true)
+        {
+            try
+            {
+                var success = await CamundaService.DeleteProcessInstanceAsync(instance.Id, "Cancelled by user");
+                if (success)
+                {
+                    NotificationService.Notify(NotificationSeverity.Success, "Success", "Process instance cancelled successfully");
+                    await LoadProcessInstances();
+                }
+                else
+                {
+                    NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to cancel process instance");
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to cancel process: {ex.Message}");
+            }
+        }
+    }
+
+    private BadgeStyle GetBadgeStyle(string color)
+    {
+        return color switch
+        {
+            "success" => BadgeStyle.Success,
+            "warning" => BadgeStyle.Warning,
+            "info" => BadgeStyle.Info,
+            "danger" => BadgeStyle.Danger,
+            _ => BadgeStyle.Secondary
+        };
+    }
+}

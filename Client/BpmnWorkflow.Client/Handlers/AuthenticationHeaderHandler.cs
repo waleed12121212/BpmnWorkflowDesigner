@@ -14,7 +14,7 @@ namespace BpmnWorkflow.Client.Handlers
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var token = await _localStorage.GetItemAsync<string>("authToken");
+            var token = await _localStorage.GetItemAsStringAsync("authToken");
 
             if (!string.IsNullOrWhiteSpace(token))
             {

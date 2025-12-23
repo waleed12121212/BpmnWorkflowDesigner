@@ -1,0 +1,245 @@
+/* Camunda Integration Styles */
+
+.nav-section-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--rz-text-secondary-color);
+    padding: 0.5rem 0;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--rz-border-color);
+}
+
+/* Process Instance Status Colors */
+.process-status-running {
+    color: var(--rz-info);
+}
+
+.process-status-completed {
+    color: var(--rz-success);
+}
+
+.process-status-suspended {
+    color: var(--rz-warning);
+}
+
+.process-status-failed {
+    color: var(--rz-danger);
+}
+
+/* Task Priority Colors */
+.task-priority-high {
+    border-left: 4px solid var(--rz-danger);
+}
+
+.task-priority-medium {
+    border-left: 4px solid var(--rz-warning);
+}
+
+.task-priority-low {
+    border-left: 4px solid var(--rz-info);
+}
+
+.task-priority-very-low {
+    border-left: 4px solid var(--rz-secondary);
+}
+
+/* Overdue Task Indicator */
+.task-overdue {
+    background-color: var(--rz-danger-lighter);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Dashboard Cards */
+.dashboard-stat-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.dashboard-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Activity Tree Styles */
+.activity-tree-node {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-left: 2px solid var(--rz-primary);
+    background-color: var(--rz-base-100);
+}
+
+.activity-tree-node-active {
+    background-color: var(--rz-primary-lighter);
+    font-weight: 600;
+}
+
+/* Variable Editor */
+.variable-editor-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.variable-editor-row input {
+    flex: 1;
+}
+
+/* Deployment Success Animation */
+@keyframes deploy-success {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.deploy-success {
+    animation: deploy-success 0.5s ease-in-out;
+}
+
+/* Loading States */
+.camunda-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    gap: 1rem;
+}
+
+/* Empty State */
+.camunda-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    gap: 1rem;
+    opacity: 0.6;
+}
+
+.camunda-empty-state-icon {
+    font-size: 4rem;
+    opacity: 0.3;
+}
+
+/* Health Status Indicator */
+.health-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.health-indicator-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+.health-indicator-healthy {
+    background-color: var(--rz-success);
+}
+
+.health-indicator-unhealthy {
+    background-color: var(--rz-danger);
+}
+
+/* Process Timeline */
+.process-timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.process-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--rz-border-color);
+}
+
+.process-timeline-item {
+    position: relative;
+    padding-bottom: 1.5rem;
+}
+
+.process-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.5rem;
+    top: 0.25rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--rz-primary);
+    border: 2px solid white;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .dashboard-stat-card {
+        margin-bottom: 1rem;
+    }
+
+    .variable-editor-row {
+        flex-direction: column;
+    }
+
+    .variable-editor-row input {
+        width: 100%;
+    }
+}
+
+/* BPMN Activity Highlighting */
+.activity-active:not(.djs-connection) .djs-visual> :nth-child(1) {
+    stroke: var(--rz-primary) !important;
+    stroke-width: 4px !important;
+    fill: var(--rz-primary-lighter) !important;
+    animation: active-pulse 2s infinite;
+}
+
+.activity-completed:not(.djs-connection) .djs-visual> :nth-child(1) {
+    stroke: var(--rz-success) !important;
+    stroke-width: 3px !important;
+    fill: var(--rz-success-lighter) !important;
+}
+
+@keyframes active-pulse {
+    0% {
+        stroke-opacity: 1;
+        fill-opacity: 0.2;
+    }
+
+    50% {
+        stroke-opacity: 0.5;
+        fill-opacity: 0.1;
+    }
+
+    100% {
+        stroke-opacity: 1;
+        fill-opacity: 0.2;
+    }
+}

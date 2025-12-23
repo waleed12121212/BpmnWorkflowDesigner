@@ -16,6 +16,8 @@ namespace BpmnWorkflow.Application.Interfaces
         DbSet<FormVersion> FormVersions { get; }
         DbSet<DmnDefinition> DmnDefinitions { get; }
         DbSet<DmnVersion> DmnVersions { get; }
+        DbSet<ProcessInstance> ProcessInstances { get; }
+        DbSet<CamundaEnvironment> CamundaEnvironments { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

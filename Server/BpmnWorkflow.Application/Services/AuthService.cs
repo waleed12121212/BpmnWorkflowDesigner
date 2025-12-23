@@ -2,6 +2,7 @@ using BpmnWorkflow.Application.Interfaces;
 using BpmnWorkflow.Client.Models;
 using BpmnWorkflow.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BpmnWorkflow.Application.Services
 {
@@ -10,12 +11,14 @@ namespace BpmnWorkflow.Application.Services
         private readonly IApplicationDbContext _context;
         private readonly IPasswordService _passwordService;
         private readonly ITokenService _tokenService;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(IApplicationDbContext context, IPasswordService passwordService, ITokenService tokenService)
+        public AuthService(IApplicationDbContext context, IPasswordService passwordService, ITokenService tokenService, ILogger<AuthService> logger)
         {
             _context = context;
             _passwordService = passwordService;
             _tokenService = tokenService;
+            _logger = logger;
         }
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -54,25 +57,49 @@ namespace BpmnWorkflow.Application.Services
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
-            var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Username == request.Username);
-
-            if (user == null || !_passwordService.VerifyPassword(request.Password, user.PasswordHash))
+            try
             {
-                return new AuthResponse { Success = false, Message = "Invalid username or password." };
+                var userCount = await _context.Users.CountAsync();
+                _logger.LogInformation("Login attempt for {Username}. Total users in DB: {Count}", request.Username, userCount);
+
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Username == request.Username);
+
+                if (user == null)
+                {
+                    _logger.LogWarning("Login failed: User {Username} not found.", request.Username);
+                    return new AuthResponse { Success = false, Message = "Invalid username or password." };
+                }
+
+                if (!_passwordService.VerifyPassword(request.Password, user.PasswordHash))
+                {
+                    _logger.LogWarning("Login failed: Password mismatch for user {Username}.", request.Username);
+                    return new AuthResponse { Success = false, Message = "Invalid username or password." };
+                }
+
+                var token = _tokenService.CreateToken(user);
+
+                _logger.LogInformation("User {Username} logged in successfully.", request.Username);
+
+                return new AuthResponse
+                {
+                    Success = true,
+                    Token = token,
+                    Username = user.Username,
+                    Email = user.Email,
+                    Roles = new List<string> { user.Role?.Name ?? "User" }
+                };
             }
-
-            var token = _tokenService.CreateToken(user);
-
-            return new AuthResponse
+            catch (Exception ex)
             {
-                Success = true,
-                Token = token,
-                Username = user.Username,
-                Email = user.Email,
-                Roles = new List<string> { user.Role?.Name ?? "User" }
-            };
+                _logger.LogError(ex, "Error during login for user {Username}", request.Username);
+                return new AuthResponse 
+                { 
+                    Success = false, 
+                    Message = $"SERVER_ERROR: {ex.Message}" 
+                };
+            }
         }
     }
 }

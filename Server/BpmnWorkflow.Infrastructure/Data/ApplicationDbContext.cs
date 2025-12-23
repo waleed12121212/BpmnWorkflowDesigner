@@ -21,6 +21,8 @@ namespace BpmnWorkflow.Infrastructure.Data
         public DbSet<FormVersion> FormVersions => Set<FormVersion>();
         public DbSet<DmnDefinition> DmnDefinitions => Set<DmnDefinition>();
         public DbSet<DmnVersion> DmnVersions => Set<DmnVersion>();
+        public DbSet<ProcessInstance> ProcessInstances => Set<ProcessInstance>();
+        public DbSet<CamundaEnvironment> CamundaEnvironments => Set<CamundaEnvironment>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -19,8 +19,8 @@ namespace BpmnWorkflow.Domain.Entities
         public DateTime? LastLoginAt { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime UpdatedAt { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
     }
 }
 

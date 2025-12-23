@@ -1,0 +1,370 @@
+@page "/camunda/dashboard"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+
+<PageTitle>Analytics Dashboard - Camunda</PageTitle>
+
+<div class="dashboard-wrapper" style="padding: 2rem; background: #f8fafc; min-height: 100vh;">
+    <RadzenStack Gap="2rem">
+        @* Header Section *@
+        <RadzenRow AlignItems="AlignItems.Center">
+            <RadzenColumn Size="12" SizeMD="8">
+                <RadzenText TextStyle="TextStyle.H3" TagName="TagName.H1" Style="font-weight: 800; color: #1e293b; margin: 0;">
+                    Workflow Analytics
+                </RadzenText>
+                <RadzenText TextStyle="TextStyle.Subtitle1" Style="color: #64748b;">
+                    Real-time performance metrics and operational health overview.
+                </RadzenText>
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="4" class="rz-text-align-end">
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="1rem">
+                    <div class="health-indicator @(isHealthy ? "healthy" : "unhealthy")" title="@healthMessage">
+                        <span class="dot"></span>
+                        @healthMessage
+                    </div>
+                    <RadzenButton Icon="refresh" Text="Refresh Data" Click="@LoadDashboardData" 
+                                  ButtonStyle="ButtonStyle.Primary" Style="border-radius: 12px; box-shadow: 0 4px 12px rgba(79, 172, 254, 0.2);" />
+                </RadzenStack>
+            </RadzenColumn>
+        </RadzenRow>
+
+        @if (isLoading)
+        {
+            <div style="height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;">
+                <RadzenProgressBarCircular Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+                <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #64748b;">Synchronizing with Camunda...</RadzenText>
+            </div>
+        }
+        else if (dashboardStats == null)
+        {
+            <RadzenAlert Title="Engine Connection Issue" Severity="Severity.Error" AllowClose="false" Variant="Variant.Flat">
+                <RadzenStack Gap="0.5rem">
+                    <RadzenText Style="color: inherit;">
+                         @healthMessage
+                    </RadzenText>
+                    @if (healthMessage.Contains("environment"))
+                    {
+                        <RadzenButton Text="Configure Environments" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" 
+                                      Click="@(() => Navigation.NavigateTo("/camunda/environments"))" Style="width: fit-content;" />
+                    }
+                    else
+                    {
+                        <RadzenText TextStyle="TextStyle.Caption" Style="color: inherit;">
+                            Please ensure the Camunda engine (Docker) is running and accessible at the configured URL.
+                        </RadzenText>
+                    }
+                </RadzenStack>
+            </RadzenAlert>
+        }
+        else
+        {
+            @* KPIs Row *@
+            <RadzenRow Gap="1.5rem">
+                <RadzenColumn Size="12" SizeMD="3">
+                    <div class="kpi-card info">
+                        <div class="kpi-icon"><RadzenIcon Icon="running_with_errors" /></div>
+                        <div class="kpi-content">
+                            <RadzenText TextStyle="TextStyle.Caption">Active Instances</RadzenText>
+                            <RadzenText TextStyle="TextStyle.H4">@dashboardStats.ActiveInstances</RadzenText>
+                        </div>
+                    </div>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <div class="kpi-card success">
+                        <div class="kpi-icon"><RadzenIcon Icon="task_alt" /></div>
+                        <div class="kpi-content">
+                            <RadzenText TextStyle="TextStyle.Caption">Completed</RadzenText>
+                            <RadzenText TextStyle="TextStyle.H4">@dashboardStats.CompletedInstances</RadzenText>
+                        </div>
+                    </div>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <div class="kpi-card warning">
+                        <div class="kpi-icon"><RadzenIcon Icon="assignment_late" /></div>
+                        <div class="kpi-content">
+                            <RadzenText TextStyle="TextStyle.Caption">Open Tasks</RadzenText>
+                            <RadzenText TextStyle="TextStyle.H4">@dashboardStats.ActiveTasks</RadzenText>
+                        </div>
+                    </div>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <div class="kpi-card danger">
+                        <div class="kpi-icon"><RadzenIcon Icon="error_outline" /></div>
+                        <div class="kpi-content">
+                            <RadzenText TextStyle="TextStyle.Caption">Incidents</RadzenText>
+                            <RadzenText TextStyle="TextStyle.H4">@dashboardStats.IncidentCount</RadzenText>
+                        </div>
+                    </div>
+                </RadzenColumn>
+            </RadzenRow>
+
+            @* Charts Row *@
+            <RadzenRow Gap="1.5rem">
+                <RadzenColumn Size="12" SizeLG="8">
+                    <RadzenCard Style="border-radius: 16px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+                        <RadzenStack Gap="1rem">
+                            <RadzenText TextStyle="TextStyle.H6" Style="font-weight: bold;">Activity Trends (Last 7 Days)</RadzenText>
+                            <RadzenChart Style="height: 350px;">
+                                <RadzenAreaSeries Data="@dashboardStats.DailyStats" CategoryProperty="Date" 
+                                                 Title="Started" ValueProperty="StartedCount" 
+                                                 Fill="#4facfe" Stroke="#4facfe" />
+                                <RadzenAreaSeries Data="@dashboardStats.DailyStats" CategoryProperty="Date" 
+                                                 Title="Finished" ValueProperty="FinishedCount" 
+                                                 Fill="#00f2fe" Stroke="#00f2fe" />
+                                <RadzenCategoryAxis Padding="20" FormatString="{0:MMM dd}" />
+                                <RadzenValueAxis>
+                                    <RadzenGridLines Visible="true" />
+                                    <RadzenAxisTitle Text="Instances" />
+                                </RadzenValueAxis>
+                                <RadzenChartTooltipOptions Shared="true" />
+                            </RadzenChart>
+                        </RadzenStack>
+                    </RadzenCard>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeLG="4">
+                    <RadzenCard Style="border-radius: 16px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 100%;">
+                        <RadzenStack Gap="1rem" Style="height: 100%;">
+                            <RadzenText TextStyle="TextStyle.H6" Style="font-weight: bold;">Instance Distribution</RadzenText>
+                            <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                                <RadzenChart Style="height: 300px; width: 300px;">
+                                    <RadzenDonutSeries Data="@GetInstanceDistribution()" 
+                                                      CategoryProperty="Label" ValueProperty="Value"
+                                                      InnerRadius="70">
+                                        <TitleTemplate>
+                                            <div class="donut-title">
+                                                <div class="total-label">Total</div>
+                                                <div class="total-value">@dashboardStats.TotalInstances</div>
+                                            </div>
+                                        </TitleTemplate>
+                                    </RadzenDonutSeries>
+                                    <RadzenLegend Visible="true" Position="LegendPosition.Bottom" />
+                                </RadzenChart>
+                            </div>
+                        </RadzenStack>
+                    </RadzenCard>
+                </RadzenColumn>
+            </RadzenRow>
+
+            @* Process Table Row *@
+            <RadzenRow class="rz-mt-4">
+                <RadzenColumn Size="12">
+                    <RadzenCard Style="border-radius: 16px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+                        <RadzenStack Gap="1.5rem">
+                            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center">
+                                <RadzenText TextStyle="TextStyle.H6" Style="font-weight: bold;">Process Performance</RadzenText>
+                                <RadzenBadge BadgeStyle="BadgeStyle.Light" IsPill="true" Text="@($"{dashboardStats.ProcessStats.Count} Active Workflows")" />
+                            </RadzenStack>
+
+                            <RadzenDataGrid Data="@dashboardStats.ProcessStats" TItem="ProcessStatsDto" 
+                                           AllowSorting="true" EmptyText="No processes currently active.">
+                                <Columns>
+                                    <RadzenDataGridColumn TItem="ProcessStatsDto" Title="Process" Width="300px">
+                                        <Template Context="p">
+                                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+                                                <div class="process-avatar">@p.ProcessName.ToUpper().FirstOrDefault()</div>
+                                                <RadzenStack Gap="0">
+                                                    <RadzenText TextStyle="TextStyle.Subtitle2" Style="margin: 0;">@p.ProcessName</RadzenText>
+                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #94a3b8;">Key: @p.ProcessDefinitionKey</RadzenText>
+                                                </RadzenStack>
+                                            </RadzenStack>
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="ProcessStatsDto" Property="ActiveInstances" Title="Active Instances" Width="150px">
+                                        <Template Context="p">
+                                            <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@p.ActiveInstances.ToString()" IsPill="true" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="ProcessStatsDto" Property="IncidentCount" Title="Incidents" Width="120px">
+                                        <Template Context="p">
+                                            @if (p.IncidentCount > 0)
+                                            {
+                                                <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="@p.IncidentCount.ToString()" IsPill="true" />
+                                            }
+                                            else
+                                            {
+                                                <RadzenIcon Icon="check_circle" Style="color: #10b981; font-size: 1.25rem;" />
+                                            }
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="ProcessStatsDto" Title="Health" Sortable="false">
+                                        <Template Context="p">
+                                            @{
+                                                var health = p.IncidentCount > 0 ? (p.IncidentCount > 5 ? 20 : 60) : 100;
+                                                var color = health == 100 ? "#10b981" : (health > 50 ? "#f59e0b" : "#ef4444");
+                                            }
+                                            <RadzenStack Gap="0.25rem">
+                                                <div style="height: 6px; width: 100%; max-width: 150px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                                                    <div style="height: 100%; width: @(health)%; background: @color;"></div>
+                                                </div>
+                                                <RadzenText TextStyle="TextStyle.Caption">@(health)% Healthy</RadzenText>
+                                            </RadzenStack>
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="ProcessStatsDto" Title="Actions" Width="100px" Sortable="false">
+                                        <Template Context="p">
+                                            <RadzenButton Icon="open_in_new" Size="ButtonSize.ExtraSmall" 
+                                                          ButtonStyle="ButtonStyle.Light" 
+                                                          Click="@(() => Navigation.NavigateTo($"/camunda/processes?processDefinitionKey={p.ProcessDefinitionKey}"))" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                </Columns>
+                            </RadzenDataGrid>
+                        </RadzenStack>
+                    </RadzenCard>
+                </RadzenColumn>
+            </RadzenRow>
+        }
+    </RadzenStack>
+</div>
+
+<style>
+    .dashboard-wrapper {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .health-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .health-indicator.healthy { color: #10b981; }
+    .health-indicator.unhealthy { color: #ef4444; }
+
+    .health-indicator .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 10px currentColor;
+    }
+
+    .kpi-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-4px);
+    }
+
+    .kpi-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .kpi-card.info .kpi-icon { background: rgba(79, 172, 254, 0.1); color: #4facfe; }
+    .kpi-card.success .kpi-icon { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .kpi-card.warning .kpi-icon { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .kpi-card.danger .kpi-icon { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+    .donut-title {
+        text-align: center;
+    }
+
+    .total-label {
+        font-size: 0.75rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .total-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1e293b;
+    }
+
+    .process-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .rz-chart {
+        background: transparent !important;
+    }
+</style>
+
+@code {
+    private DashboardStatsDto? dashboardStats;
+    private bool isLoading = true;
+    private bool isHealthy = false;
+    private string healthMessage = "Initializing...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await CamundaService.CheckHealthAsync();
+            isHealthy = result.IsHealthy;
+            healthMessage = result.Message;
+
+            if (isHealthy)
+            {
+                dashboardStats = await CamundaService.GetDashboardStatsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Sync Error", "Could not fetch data from Camunda.");
+            Console.WriteLine($"Dashboard Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class ChartDataItem
+    {
+        public string Label { get; set; } = string.Empty;
+        public int Value { get; set; }
+    }
+
+    private List<ChartDataItem> GetInstanceDistribution()
+    {
+        if (dashboardStats == null) return new();
+
+        return new List<ChartDataItem>
+        {
+            new ChartDataItem { Label = "Active", Value = dashboardStats.ActiveInstances },
+            new ChartDataItem { Label = "Completed", Value = dashboardStats.CompletedInstances },
+            new ChartDataItem { Label = "Incidents", Value = dashboardStats.IncidentCount }
+        };
+    }
+}

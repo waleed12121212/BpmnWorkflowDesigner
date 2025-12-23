@@ -23,6 +23,12 @@ namespace BpmnWorkflow.Domain.Entities
         public string? Tags { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }
+        
+        // Camunda Integration Properties
+        public string? CamundaDeploymentId { get; set; }
+        public string? CamundaProcessDefinitionId { get; set; }
+        public bool IsDeployed { get; set; }
+        public DateTime? LastDeployedAt { get; set; }
     }
 }
 

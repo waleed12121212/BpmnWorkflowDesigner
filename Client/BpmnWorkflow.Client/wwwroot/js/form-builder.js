@@ -100,6 +100,12 @@ window.FormBuilder = (function () {
             a.click();
             window.URL.revokeObjectURL(url);
         },
+        submitViewerData: function () {
+            if (!viewer) return null;
+            // The viewer.submit() method returns an object with { data, errors }
+            // but it's often easier to just get the state
+            return viewer._state.data;
+        },
         toggleFullScreen: function (elementId) {
             const el = document.getElementById(elementId) || document.documentElement;
             if (!document.fullscreenElement) {

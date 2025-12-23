@@ -68,8 +68,20 @@ namespace BpmnWorkflow.API.Controllers
                 return Unauthorized("User ID not found in token.");
             }
 
-            var workflow = await _workflowService.CreateAsync(request, userId);
-            return CreatedAtAction(nameof(GetWorkflow), new { id = workflow.Id }, workflow);
+            try
+            {
+                var workflow = await _workflowService.CreateAsync(request, userId);
+                return CreatedAtAction(nameof(GetWorkflow), new { id = workflow.Id }, workflow);
+            }
+            catch (Exception ex) when (ex.InnerException?.Message.Contains("FOREIGN KEY") == true || ex.Message.Contains("FOREIGN KEY") == true)
+            {
+                return BadRequest("Your user account was not found in the database. Please logout and login again to refresh your session.");
+            }
+            catch (Exception ex)
+            {
+                // Rethrow to be caught by global exception middleware or return 500
+                return StatusCode(500, new { message = "An error occurred while creating the workflow.", details = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]

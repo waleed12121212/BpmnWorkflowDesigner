@@ -8,6 +8,7 @@ namespace BpmnWorkflow.Client.Models
         public int TotalWorkflows { get; set; }
         public int TotalUsers { get; set; }
         public int TotalComments { get; set; }
+        public int TotalProcessInstances { get; set; }
         public List<DateMetricDto> WorkflowsCreatedTrend { get; set; } = new();
         public List<UserMetricDto> TopContributors { get; set; } = new();
     }

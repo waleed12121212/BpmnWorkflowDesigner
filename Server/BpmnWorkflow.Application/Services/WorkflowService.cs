@@ -258,5 +258,26 @@ namespace BpmnWorkflow.Application.Services
 
             return await GetByIdAsync(workflowId);
         }
+        
+        // ========== Camunda Integration Methods ==========
+        
+        public async Task<WorkflowDto?> GetWorkflowByIdAsync(Guid id)
+        {
+            return await GetByIdAsync(id);
+        }
+        
+        public async Task UpdateCamundaDeploymentInfoAsync(Guid workflowId, string deploymentId, string processDefinitionId)
+        {
+            var workflow = await _context.Workflows.FirstOrDefaultAsync(w => w.Id == workflowId);
+            if (workflow == null)
+                throw new InvalidOperationException($"Workflow {workflowId} not found");
+            
+            workflow.CamundaDeploymentId = deploymentId;
+            workflow.CamundaProcessDefinitionId = processDefinitionId;
+            workflow.IsDeployed = true;
+            workflow.LastDeployedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync();
+        }
     }
 }

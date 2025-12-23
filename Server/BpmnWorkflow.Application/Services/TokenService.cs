@@ -19,6 +19,18 @@ namespace BpmnWorkflow.Application.Services
 
         public string CreateToken(User user)
         {
+            var jwtKey = _configuration["Jwt:Key"];
+            if (string.IsNullOrEmpty(jwtKey))
+            {
+                throw new InvalidOperationException("JWT Key is not configured in appsettings.json");
+            }
+
+            var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+            if (keyBytes.Length < 32)
+            {
+                throw new InvalidOperationException("JWT Key must be at least 32 characters (256 bits) long.");
+            }
+
             List<Claim> claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -26,14 +38,14 @@ namespace BpmnWorkflow.Application.Services
                 new Claim(ClaimTypes.Role, user.Role?.Name ?? "User")
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var key = new SymmetricSecurityKey(keyBytes);
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddDays(1),
+                expires: DateTime.UtcNow.AddDays(1),
                 signingCredentials: creds
             );
 

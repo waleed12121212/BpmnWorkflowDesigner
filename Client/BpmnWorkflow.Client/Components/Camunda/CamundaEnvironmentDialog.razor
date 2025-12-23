@@ -1,0 +1,93 @@
+@using BpmnWorkflow.Client.Models
+@inject Radzen.DialogService DialogService
+
+<RadzenTemplateForm TItem="CamundaEnvironmentUpsertDto" Data="@_model" Submit="@HandleSubmit">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <RadzenLabel Text="Friendly Name" />
+            </div>
+            <div class="col-md-8">
+                <RadzenTextBox @bind-Value="@_model.Name" Style="width: 100%" Name="Name" />
+                <RadzenRequiredValidator Component="Name" Text="Name is required" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <RadzenLabel Text="Camunda Base URL" />
+            </div>
+            <div class="col-md-8">
+                <RadzenTextBox @bind-Value="@_model.BaseUrl" Style="width: 100%" Name="BaseUrl" Placeholder="http://localhost:8080/engine-rest/" />
+                <RadzenRequiredValidator Component="BaseUrl" Text="Base URL is required" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <RadzenLabel Text="Username (Optional)" />
+            </div>
+            <div class="col-md-8">
+                <RadzenTextBox @bind-Value="@_model.Username" Style="width: 100%" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <RadzenLabel Text="Password (Optional)" />
+            </div>
+            <div class="col-md-8">
+                <RadzenPassword @bind-Value="@_model.Password" Style="width: 100%" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <RadzenLabel Text="Description" />
+            </div>
+            <div class="col-md-8">
+                <RadzenTextArea @bind-Value="@_model.Description" Style="width: 100%" Rows="3" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12 text-end">
+                <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="@(() => DialogService.Close(false))" Class="me-2" />
+                <RadzenButton ButtonType="ButtonType.Submit" Text="Save" ButtonStyle="ButtonStyle.Primary" />
+            </div>
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public CamundaEnvironmentDto? Environment { get; set; }
+
+    private CamundaEnvironmentUpsertDto _model = new();
+
+    protected override void OnInitialized()
+    {
+        if (Environment != null)
+        {
+            _model = new CamundaEnvironmentUpsertDto
+            {
+                Name = Environment.Name,
+                BaseUrl = Environment.BaseUrl,
+                Username = Environment.Username,
+                Password = Environment.Password,
+                Description = Environment.Description
+            };
+        }
+        else
+        {
+            _model = new CamundaEnvironmentUpsertDto
+            {
+                BaseUrl = "http://localhost:8080/engine-rest/"
+            };
+        }
+    }
+
+    private void HandleSubmit(CamundaEnvironmentUpsertDto model)
+    {
+        DialogService.Close(model);
+    }
+}

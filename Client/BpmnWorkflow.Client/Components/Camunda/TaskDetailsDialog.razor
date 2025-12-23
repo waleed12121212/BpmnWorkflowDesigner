@@ -1,0 +1,130 @@
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NotificationService NotificationService
+
+<RadzenStack Gap="1rem">
+    <RadzenCard class="rz-background-color-info-lighter">
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Subtitle1">Task Information</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Task ID:</strong> @Task.Id</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Name:</strong> @Task.Name</RadzenText>
+            @if (!string.IsNullOrEmpty(Task.Description))
+            {
+                <RadzenText TextStyle="TextStyle.Body2"><strong>Description:</strong> @Task.Description</RadzenText>
+            }
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Task Definition Key:</strong> @Task.TaskDefinitionKey</RadzenText>
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenCard>
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Subtitle1">Process Information</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Process Instance ID:</strong> @Task.ProcessInstanceId</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Process Definition ID:</strong> @Task.ProcessDefinitionId</RadzenText>
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenCard>
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Subtitle1">Assignment & Timing</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2">
+                <strong>Assignee:</strong> 
+                @if (Task.IsAssigned)
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@Task.Assignee" />
+                }
+                else
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Light" Text="Unassigned" />
+                }
+            </RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2">
+                <strong>Priority:</strong> 
+                <RadzenBadge BadgeStyle="@GetPriorityBadgeStyle(Task.PriorityColor)" Text="@Task.PriorityText" /> 
+                (@Task.Priority)
+            </RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Created:</strong> @Task.Created.ToString("yyyy-MM-dd HH:mm:ss")</RadzenText>
+            @if (Task.Due.HasValue)
+            {
+                <RadzenText TextStyle="TextStyle.Body2">
+                    <strong>Due Date:</strong> @Task.Due.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                    @if (Task.IsOverdue)
+                    {
+                        <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="Overdue" class="rz-ml-2" />
+                    }
+                </RadzenText>
+            }
+            @if (Task.FollowUp.HasValue)
+            {
+                <RadzenText TextStyle="TextStyle.Body2"><strong>Follow-up:</strong> @Task.FollowUp.Value.ToString("yyyy-MM-dd HH:mm:ss")</RadzenText>
+            }
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenText TextStyle="TextStyle.Subtitle1">Task Variables</RadzenText>
+    @if (isLoadingVariables)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+    }
+    else if (taskVariables.Any())
+    {
+        <RadzenCard>
+            <RadzenDataGrid Data="@taskVariables" TItem="KeyValuePair<string, object>" AllowPaging="true" PageSize="5">
+                <Columns>
+                    <RadzenDataGridColumn TItem="KeyValuePair<string, object>" Property="Key" Title="Variable Name" Width="200px" />
+                    <RadzenDataGridColumn TItem="KeyValuePair<string, object>" Property="Value" Title="Value">
+                        <Template Context="variable">
+                            <RadzenText TextStyle="TextStyle.Body2">@variable.Value?.ToString()</RadzenText>
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    }
+    else
+    {
+        <RadzenText TextStyle="TextStyle.Body2" class="rz-color-secondary">No variables found for this task</RadzenText>
+    }
+</RadzenStack>
+
+@code {
+    [Parameter]
+    public UserTaskDto Task { get; set; } = new();
+
+    private Dictionary<string, object> taskVariables = new();
+    private bool isLoadingVariables = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaskVariables();
+    }
+
+    private async Task LoadTaskVariables()
+    {
+        isLoadingVariables = true;
+        try
+        {
+            taskVariables = await CamundaService.GetTaskVariablesAsync(Task.Id);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", $"Could not load task variables: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingVariables = false;
+        }
+    }
+
+    private BadgeStyle GetPriorityBadgeStyle(string color)
+    {
+        return color switch
+        {
+            "danger" => BadgeStyle.Danger,
+            "warning" => BadgeStyle.Warning,
+            "info" => BadgeStyle.Info,
+            _ => BadgeStyle.Secondary
+        };
+    }
+}

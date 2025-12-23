@@ -24,6 +24,7 @@ namespace BpmnWorkflow.Application.Services
             analytics.TotalWorkflows = await _context.Workflows.CountAsync(w => !w.IsDeleted);
             analytics.TotalUsers = await _context.Users.CountAsync();
             analytics.TotalComments = await _context.Comments.CountAsync();
+            analytics.TotalProcessInstances = await _context.ProcessInstances.CountAsync();
 
             // Workflow Creation Trend (Last 7 days)
             var last7Days = DateTime.UtcNow.AddDays(-6).Date;

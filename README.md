@@ -36,6 +36,14 @@
 - Dark mode support (optional)
 - Intuitive navigation and workflows
 
+🚀 **Camunda Integration** (NEW!)
+- Deploy workflows to Camunda Platform 7 engine
+- Execute BPMN processes with real workflow engine
+- Manage user tasks and external tasks
+- Monitor running process instances
+- Process variables and business data management
+- Integration with existing systems via external tasks
+
 ## 🏗️ Architecture
 
 ### Technology Stack
@@ -55,6 +63,12 @@
 **Database:**
 - SQL Server 2019+ or PostgreSQL 14+
 - Redis (optional, for caching)
+
+**Workflow Engine:**
+- Camunda Platform 7 (Community Edition)
+- BPMN 2.0 execution engine
+- DMN decision engine
+- External task workers
 
 **DevOps:**
 - Docker & Docker Compose

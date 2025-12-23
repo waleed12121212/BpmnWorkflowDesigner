@@ -136,6 +136,15 @@ namespace BpmnWorkflow.Client.Services
 
         public Task RegisterModelChangeListenerAsync(object dotnetRef) =>
             _jsRuntime.InvokeVoidAsync("BpmnModeler.registerModelChangeListener", dotnetRef).AsTask();
+
+        public Task UpdateProcessPropertyAsync(string key, string value) =>
+            _jsRuntime.InvokeVoidAsync("BpmnModeler.updateProcessProperty", key, value).AsTask();
+
+        public Task ApplyHeatmapAsync(List<Models.ActivityStatsDto> stats) =>
+            _jsRuntime.InvokeVoidAsync("BpmnModeler.applyHeatmap", stats).AsTask();
+
+        public Task ClearHeatmapAsync() =>
+            _jsRuntime.InvokeVoidAsync("BpmnModeler.clearHeatmap").AsTask();
     }
 }
 

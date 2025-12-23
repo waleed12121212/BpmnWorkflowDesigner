@@ -1,0 +1,243 @@
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+@inject IFormService FormService
+@inject IJSRuntime JsRuntime
+
+<RadzenStack Gap="1rem">
+    <RadzenCard class="rz-background-color-info-lighter">
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Subtitle2">Task Information</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Name:</strong> @Task.Name</RadzenText>
+            @if (!string.IsNullOrEmpty(Task.Description))
+            {
+                <RadzenText TextStyle="TextStyle.Body2"><strong>Description:</strong> @Task.Description</RadzenText>
+            }
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Process Instance:</strong> @Task.ProcessInstanceId</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2"><strong>Created:</strong> @Task.Created.ToString("yyyy-MM-dd HH:mm")</RadzenText>
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenText TextStyle="TextStyle.Subtitle2">Task Variables</RadzenText>
+    
+    @if (isLoadingVariables)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+    }
+    else if (taskVariables.Any())
+    {
+        <RadzenCard>
+            <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mb-2">Incoming Variables:</RadzenText>
+            <RadzenStack Gap="0.5rem">
+                @foreach (var variable in taskVariables)
+                {
+                    <RadzenRow>
+                        <RadzenColumn Size="4">
+                            <RadzenText TextStyle="TextStyle.Caption" class="rz-color-secondary">@variable.Key</RadzenText>
+                        </RadzenColumn>
+                        <RadzenColumn Size="8">
+                            <RadzenText TextStyle="TextStyle.Body2">@variable.Value?.ToString()</RadzenText>
+                        </RadzenColumn>
+                    </RadzenRow>
+                }
+            </RadzenStack>
+        </RadzenCard>
+    }
+
+    @if (hasForm)
+    {
+        <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mt-4">Task Form</RadzenText>
+        <RadzenCard Style="background: white; min-height: 200px;">
+            @if (isLoadingForm)
+            {
+                <RadzenStack AlignItems="AlignItems.Center" class="rz-p-4">
+                    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+                    <RadzenText TextStyle="TextStyle.Caption">Loading form schema...</RadzenText>
+                </RadzenStack>
+            }
+            <div id="task-form-container"></div>
+        </RadzenCard>
+    }
+    else
+    {
+        <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mt-2">Output Variables (Optional)</RadzenText>
+        
+        @foreach (var variable in outputVariables)
+        {
+            <RadzenCard class="rz-p-2">
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center">
+                    <RadzenTextBox @bind-Value="@variable.Name" Placeholder="Variable name" Style="width: 200px;" />
+                    <RadzenTextBox @bind-Value="@variable.Value" Placeholder="Value" Style="flex: 1;" />
+                    <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" 
+                                Size="ButtonSize.Small" Click="@(() => RemoveVariable(variable))" />
+                </RadzenStack>
+            </RadzenCard>
+        }
+
+        <RadzenButton Icon="add" Text="Add Output Variable" Click="@AddVariable" Variant="Variant.Flat" Size="ButtonSize.Small" />
+    }
+
+    <RadzenFormField Text="Completion Notes (Optional)" Variant="Variant.Outlined" class="rz-mt-2">
+        <RadzenTextArea @bind-Value="@completionNotes" Rows="3" Style="width: 100%;" 
+                       Placeholder="Add any notes about completing this task..." />
+    </RadzenFormField>
+
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" JustifyContent="JustifyContent.End" class="rz-mt-4">
+        <RadzenButton Text="Cancel" Click="@Cancel" Variant="Variant.Flat" />
+        <RadzenButton Text="Complete Task" Click="@CompleteTask" ButtonStyle="ButtonStyle.Success" 
+                     Disabled="@isCompleting" Icon="check_circle" />
+    </RadzenStack>
+
+    @if (isCompleting)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+    }
+</RadzenStack>
+
+@code {
+    [Parameter]
+    public UserTaskDto Task { get; set; } = new();
+
+    private Dictionary<string, object> taskVariables = new();
+    private List<VariableInput> outputVariables = new();
+    private string? completionNotes;
+    private bool isLoadingVariables = true;
+    private bool isLoadingForm = false;
+    private bool isCompleting = false;
+    private bool hasForm = false;
+    private FormDefinitionDto? formDefinition;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hasForm = !string.IsNullOrEmpty(Task.FormKey) && Guid.TryParse(Task.FormKey, out _);
+        
+        await System.Threading.Tasks.Task.WhenAll(
+            LoadTaskVariables(),
+            LoadFormIfNeeded()
+        );
+    }
+
+    private async Task LoadFormIfNeeded()
+    {
+        if (hasForm && Guid.TryParse(Task.FormKey, out var formId))
+        {
+            isLoadingForm = true;
+            try
+            {
+                formDefinition = await FormService.GetByIdAsync(formId);
+            }
+            catch (Exception ex)
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to load form: {ex.Message}");
+            }
+            finally
+            {
+                isLoadingForm = false;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (hasForm && formDefinition != null && !isLoadingForm)
+        {
+            // Small delay to ensure container is in DOM
+            await System.Threading.Tasks.Task.Delay(100);
+            await JsRuntime.InvokeVoidAsync("FormBuilder.initializeViewer", "task-form-container", formDefinition.SchemaJson, taskVariables);
+        }
+    }
+
+    private async Task LoadTaskVariables()
+    {
+        isLoadingVariables = true;
+        try
+        {
+            taskVariables = await CamundaService.GetTaskVariablesAsync(Task.Id);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, "Warning", $"Could not load task variables: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingVariables = false;
+        }
+    }
+
+    private void AddVariable()
+    {
+        outputVariables.Add(new VariableInput());
+    }
+
+    private void RemoveVariable(VariableInput variable)
+    {
+        outputVariables.Remove(variable);
+    }
+
+    private async Task CompleteTask()
+    {
+        isCompleting = true;
+        try
+        {
+            var variablesDict = new Dictionary<string, object>();
+
+            if (hasForm)
+            {
+                var formData = await JsRuntime.InvokeAsync<Dictionary<string, object>>("FormBuilder.submitViewerData");
+                if (formData != null)
+                {
+                    foreach (var kvp in formData)
+                    {
+                        variablesDict[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            else
+            {
+                variablesDict = outputVariables
+                    .Where(v => !string.IsNullOrEmpty(v.Name))
+                    .ToDictionary(v => v.Name!, v => (object)v.Value!);
+            }
+
+            // Add completion notes if provided
+            if (!string.IsNullOrEmpty(completionNotes))
+            {
+                variablesDict["completionNotes"] = completionNotes;
+            }
+
+            var success = await CamundaService.CompleteTaskAsync(Task.Id, variablesDict.Any() ? variablesDict : null);
+            
+            if (success)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, "Success", 
+                    $"Task '{Task.Name}' completed successfully");
+                DialogService.Close(true);
+            }
+            else
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error", "Failed to complete task");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", $"Failed to complete task: {ex.Message}");
+        }
+        finally
+        {
+            isCompleting = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        DialogService.Close(null);
+    }
+
+    private class VariableInput
+    {
+        public string? Name { get; set; }
+        public string? Value { get; set; }
+    }
+}

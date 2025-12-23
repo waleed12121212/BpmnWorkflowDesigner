@@ -27,13 +27,20 @@ namespace BpmnWorkflow.Client.Services
             var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
             if (!response.IsSuccessStatusCode)
             {
-                return new AuthResponse { Success = false, Message = "Invalid credentials or server error" };
+                try
+                {
+                    var errorResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                    return errorResponse ?? new AuthResponse { Success = false, Message = response.ReasonPhrase ?? "Unknown error" };
+                }
+                catch
+                {
+                    return new AuthResponse { Success = false, Message = $"Server returned {response.StatusCode}" };
+                }
             }
 
             var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
             if (authResponse is { Success: true, Token: not null })
             {
-                await _localStorage.SetItemAsync(TokenStorageKey, authResponse.Token);
                 await _authStateProvider.NotifyUserAuthenticationAsync(authResponse.Token);
             }
 
@@ -43,7 +50,18 @@ namespace BpmnWorkflow.Client.Services
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
             var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
-            if (!response.IsSuccessStatusCode) return new AuthResponse { Success = false, Message = "Registration failed" };
+            if (!response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    var errorResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                    return errorResponse ?? new AuthResponse { Success = false, Message = "Registration failed" };
+                }
+                catch
+                {
+                    return new AuthResponse { Success = false, Message = $"Registration failed with {response.StatusCode}" };
+                }
+            }
             return await response.Content.ReadFromJsonAsync<AuthResponse>() ?? new AuthResponse { Success = false, Message = "Failed to deserialize response" };
         }
 

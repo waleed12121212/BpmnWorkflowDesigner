@@ -12,5 +12,9 @@ namespace BpmnWorkflow.Application.Interfaces
         Task<bool> DeleteAsync(Guid id, Guid userId);
         Task<IEnumerable<WorkflowVersionDto>> GetVersionsAsync(Guid workflowId);
         Task<WorkflowDto?> RestoreVersionAsync(Guid workflowId, Guid versionId, Guid userId);
+        
+        // Camunda Integration Methods
+        Task<WorkflowDto?> GetWorkflowByIdAsync(Guid id);
+        Task UpdateCamundaDeploymentInfoAsync(Guid workflowId, string deploymentId, string processDefinitionId);
     }
 }
