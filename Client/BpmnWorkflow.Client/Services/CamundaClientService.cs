@@ -17,11 +17,13 @@ public class CamundaClientService
 
     // ========== Deployment Operations ==========
 
-    public async Task<DeployWorkflowResponse?> DeployWorkflowAsync(Guid workflowId)
+    public async Task<DeployWorkflowResponse?> DeployWorkflowAsync(Guid workflowId, Guid? environmentId = null)
     {
         try
         {
-            var response = await _httpClient.PostAsync($"api/camunda/deploy/{workflowId}", null);
+            var url = $"api/camunda/deploy/{workflowId}";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            var response = await _httpClient.PostAsync(url, null);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -53,6 +55,32 @@ public class CamundaClientService
         }
     }
 
+    public async Task<DeployWorkflowResponse?> DeployRawXmlAsync(string name, string xml, Guid? environmentId = null)
+    {
+        try
+        {
+            var url = "api/camunda/deploy-xml";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            
+            var request = new DeployWorkflowRequest { DeploymentName = name, BpmnXml = xml };
+            var response = await _httpClient.PostAsJsonAsync(url, request);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                 var details = await response.Content.ReadAsStringAsync();
+                 throw new Exception($"Deployment failed: {details}");
+            }
+            
+            return await response.Content.ReadFromJsonAsync<DeployWorkflowResponse>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deploying raw XML: {ex.Message}");
+            throw;
+        }
+    }
+
+
     public async Task<DeployWorkflowResponse?> DeployDmnAsync(Guid dmnId)
     {
         try
@@ -68,11 +96,13 @@ public class CamundaClientService
         }
     }
 
-    public async Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync()
+    public async Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync(Guid? environmentId = null)
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<List<ProcessDefinitionDto>>("api/camunda/process-definitions") 
+            var url = "api/camunda/process-definitions";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            return await _httpClient.GetFromJsonAsync<List<ProcessDefinitionDto>>(url) 
                    ?? new List<ProcessDefinitionDto>();
         }
         catch (Exception ex)
@@ -131,11 +161,14 @@ public class CamundaClientService
 
     // ========== Process Instance Operations ==========
 
-    public async Task<ProcessInstanceDto?> StartProcessInstanceAsync(StartProcessInstanceRequest request)
+    public async Task<ProcessInstanceDto?> StartProcessInstanceAsync(StartProcessInstanceRequest request, Guid? environmentId = null)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/camunda/processes/start", request);
+            var url = "api/camunda/processes/start";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            
+            var response = await _httpClient.PostAsJsonAsync(url, request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<ProcessInstanceDto>();
         }
@@ -146,13 +179,19 @@ public class CamundaClientService
         }
     }
 
-    public async Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null)
+    public async Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null, Guid? environmentId = null)
     {
         try
         {
-            var url = "api/camunda/processes";
+            var queryParams = new List<string>();
             if (!string.IsNullOrEmpty(processDefinitionKey))
-                url += $"?processDefinitionKey={processDefinitionKey}";
+                queryParams.Add($"processDefinitionKey={processDefinitionKey}");
+            if (environmentId.HasValue)
+                queryParams.Add($"environmentId={environmentId}");
+
+            var url = "api/camunda/processes";
+            if (queryParams.Any())
+                url += "?" + string.Join("&", queryParams);
 
             return await _httpClient.GetFromJsonAsync<List<ProcessInstanceDto>>(url) 
                    ?? new List<ProcessInstanceDto>();
@@ -224,7 +263,7 @@ public class CamundaClientService
 
     // ========== User Task Operations ==========
 
-    public async Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null)
+    public async Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null, Guid? environmentId = null)
     {
         try
         {
@@ -233,6 +272,8 @@ public class CamundaClientService
                 queryParams.Add($"assignee={assignee}");
             if (!string.IsNullOrEmpty(processInstanceId))
                 queryParams.Add($"processInstanceId={processInstanceId}");
+            if (environmentId.HasValue)
+                queryParams.Add($"environmentId={environmentId}");
 
             var url = "api/camunda/tasks";
             if (queryParams.Any())
@@ -348,11 +389,13 @@ public class CamundaClientService
         }
     }
 
-    public async Task<DashboardStatsDto?> GetDashboardStatsAsync()
+    public async Task<DashboardStatsDto?> GetDashboardStatsAsync(Guid? environmentId = null)
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<DashboardStatsDto>("api/camunda/dashboard");
+            var url = "api/camunda/dashboard";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            return await _httpClient.GetFromJsonAsync<DashboardStatsDto>(url);
         }
         catch (Exception ex)
         {
@@ -363,11 +406,14 @@ public class CamundaClientService
 
     // ========== Health Check ==========
 
-    public async Task<HealthCheckResult> CheckHealthAsync()
+    public async Task<HealthCheckResult> CheckHealthAsync(Guid? environmentId = null)
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/camunda/health");
+            var url = "api/camunda/health";
+            if (environmentId.HasValue) url += $"?environmentId={environmentId}";
+            
+            var response = await _httpClient.GetAsync(url);
             if (response.IsSuccessStatusCode)
             {
                 return new HealthCheckResult { IsHealthy = true, Message = "Engine Online" };

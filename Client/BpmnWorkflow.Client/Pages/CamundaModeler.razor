@@ -1,5 +1,11 @@
 @page "/camunda-modeler"
 @inject IJSRuntime JSRuntime
+@inject IWorkflowService WorkflowService
+@inject CamundaClientService CamundaService
+@inject Radzen.DialogService DialogService
+@inject Radzen.NotificationService NotificationService
+@using BpmnWorkflow.Client.Components.Camunda
+@using BpmnWorkflow.Client.Models
 
 <PageTitle>Camunda Modeler</PageTitle>
 
@@ -15,6 +21,12 @@
             </button>
             <button class="btn btn-outline-secondary btn-sm me-2" @onclick="CreateNew">
                 <i class="bi bi-file-earmark-plus"></i> New
+            </button>
+            <button class="btn btn-success btn-sm me-2" @onclick="SaveWorkflow">
+                <i class="bi bi-save"></i> Save
+            </button>
+            <button class="btn btn-warning btn-sm me-2 text-white" @onclick="DeployWorkflow">
+                <i class="bi bi-cloud-upload"></i> Deploy
             </button>
             <button class="btn btn-primary btn-sm" @onclick="DownloadXml">
                 <i class="bi bi-download"></i> Export
@@ -123,6 +135,14 @@
 
             await JSRuntime.InvokeVoidAsync("CamundaModeler.init", "js-canvas", "js-properties-panel");
 
+            // Overwrite with unique process ID
+            try {
+                var uniqueXml = await JSRuntime.InvokeAsync<string>("BpmnModeler.getEmptyDiagramXML");
+                await JSRuntime.InvokeVoidAsync("CamundaModeler.importXML", uniqueXml);
+            } catch (Exception ex) {
+                Console.WriteLine($"Error creating unique diagram: {ex.Message}");
+            }
+
             // Load templates from absolute path
             try {
                 await JSRuntime.InvokeVoidAsync("CamundaModeler.loadTemplates", "/templates/all-connectors.json");
@@ -151,7 +171,54 @@
         var xml = await JSRuntime.InvokeAsync<string>("CamundaModeler.getXML");
         if (!string.IsNullOrEmpty(xml))
         {
-             await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "diagram.bpmn", xml);
+             await JSRuntime.InvokeVoidAsync("CamundaModeler.downloadFileFromStream", "diagram.bpmn", xml);
+        }
+    }
+
+    private async Task SaveWorkflow()
+    {
+        var xml = await JSRuntime.InvokeAsync<string>("CamundaModeler.getXML");
+        if (string.IsNullOrEmpty(xml)) return;
+
+        var result = await DialogService.OpenAsync<SaveWorkflowDialog>("Save Designed Workflow", 
+            new Dictionary<string, object>(), 
+            new Radzen.DialogOptions { Width = "500px" });
+
+        if (result is SaveWorkflowDialog.SaveResult saveResult)
+        {
+            try {
+                var request = new UpsertWorkflowRequest {
+                    Name = saveResult.Name,
+                    Description = saveResult.Description,
+                    BpmnXml = xml,
+                    Category = "Camunda"
+                };
+                await WorkflowService.CreateAsync(request);
+                NotificationService.Notify(Radzen.NotificationSeverity.Success, "Saved", "Workflow saved successfully to database.");
+            } catch (Exception ex) {
+                NotificationService.Notify(Radzen.NotificationSeverity.Error, "Error", $"Failed to save: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task DeployWorkflow()
+    {
+        var xml = await JSRuntime.InvokeAsync<string>("CamundaModeler.getXML");
+        if (string.IsNullOrEmpty(xml)) return;
+
+        var result = await DialogService.OpenAsync<DeployRawXmlDialog>("Deploy to Camunda", 
+            new Dictionary<string, object>(), 
+            new Radzen.DialogOptions { Width = "500px" });
+
+        if (result is DeployRawXmlDialog.DeployResult deployResult)
+        {
+            try {
+                var res = await CamundaService.DeployRawXmlAsync(deployResult.Name, xml, deployResult.EnvironmentId);
+                NotificationService.Notify(Radzen.NotificationSeverity.Success, "Deployed", 
+                    $"Successfully deployed to environment. Deployment ID: {res?.DeploymentId}");
+            } catch (Exception ex) {
+                NotificationService.Notify(Radzen.NotificationSeverity.Error, "Deployment Failed", ex.Message);
+            }
         }
     }
 }

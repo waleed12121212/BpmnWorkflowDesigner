@@ -12,7 +12,7 @@ public interface ICamundaService
     /// <summary>
     /// Deploy a BPMN workflow to Camunda engine
     /// </summary>
-    Task<DeployWorkflowResponse> DeployWorkflowAsync(DeployWorkflowRequest request, CancellationToken cancellationToken = default);
+    Task<DeployWorkflowResponse> DeployWorkflowAsync(DeployWorkflowRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Deploy a DMN decision table to Camunda engine
@@ -22,7 +22,7 @@ public interface ICamundaService
     /// <summary>
     /// Get all process definitions
     /// </summary>
-    Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync(CancellationToken cancellationToken = default);
+    Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync(Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Get process definition by key
@@ -54,17 +54,17 @@ public interface ICamundaService
     /// <summary>
     /// Start a new process instance
     /// </summary>
-    Task<ProcessInstanceDto> StartProcessInstanceAsync(StartProcessInstanceRequest request, CancellationToken cancellationToken = default);
+    Task<ProcessInstanceDto> StartProcessInstanceAsync(StartProcessInstanceRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Get process instance by ID
     /// </summary>
-    Task<ProcessInstanceDto?> GetProcessInstanceAsync(string processInstanceId, CancellationToken cancellationToken = default);
+    Task<ProcessInstanceDto?> GetProcessInstanceAsync(string processInstanceId, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Get all active process instances
     /// </summary>
-    Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null, CancellationToken cancellationToken = default);
+    Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Cancel/Delete a process instance
@@ -81,7 +81,7 @@ public interface ICamundaService
     /// <summary>
     /// Get all user tasks
     /// </summary>
-    Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null, CancellationToken cancellationToken = default);
+    Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Get user task by ID
@@ -101,7 +101,7 @@ public interface ICamundaService
     /// <summary>
     /// Complete a user task
     /// </summary>
-    Task<bool> CompleteTaskAsync(string taskId, CompleteTaskRequest request, CancellationToken cancellationToken = default);
+    Task<bool> CompleteTaskAsync(string taskId, CompleteTaskRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default);
     
     // ========== Process Variables Operations ==========
     
@@ -142,10 +142,10 @@ public interface ICamundaService
     /// <summary>
     /// Get consolidated statistics for the dashboard
     /// </summary>
-    Task<DashboardStatsDto> GetDashboardStatsAsync(CancellationToken cancellationToken = default);
+    Task<DashboardStatsDto> GetDashboardStatsAsync(Guid? environmentId = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Check if Camunda engine is available
     /// </summary>
-    Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default);
+    Task<bool> IsHealthyAsync(Guid? environmentId = null, CancellationToken cancellationToken = default);
 }

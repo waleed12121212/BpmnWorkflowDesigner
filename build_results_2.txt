@@ -1,0 +1,12 @@
+  BpmnWorkflow.Domain -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Domain\bin\Debug\net10.0\BpmnWorkflow.Domain.dll
+  BpmnWorkflow.Client -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Client\BpmnWorkflow.Client\bin\Debug\net10.0\BpmnWorkflow.Client.dll
+  BpmnWorkflow.Client (Blazor output) -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Client\BpmnWorkflow.Client\bin\Debug\net10.0\wwwroot
+  BpmnWorkflow.Application -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\bin\Debug\net10.0\BpmnWorkflow.Application.dll
+  BpmnWorkflow.Infrastructure -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Infrastructure\bin\Debug\net10.0\BpmnWorkflow.Infrastructure.dll
+  BpmnWorkflow.API -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.API\bin\Debug\net10.0\BpmnWorkflow.API.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:17.56

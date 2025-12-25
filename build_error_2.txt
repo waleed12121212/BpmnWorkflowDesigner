@@ -1,18 +1,17 @@
   BpmnWorkflow.Domain -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Domain\bin\Debug\net10.0\BpmnWorkflow.Domain.dll
   BpmnWorkflow.Client -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Client\BpmnWorkflow.Client\bin\Debug\net10.0\BpmnWorkflow.Client.dll
   BpmnWorkflow.Client (Blazor output) -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Client\BpmnWorkflow.Client\bin\Debug\net10.0\wwwroot
-C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\Camunda8Service.cs(102,24): error CS1061: 'IZeebeClientTransportBuilder' does not contain a definition for 'Build' and no accessible extension method 'Build' accepting a first argument of type 'IZeebeClientTransportBuilder' could be found (are you missing a using directive or an assembly reference?) [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\AnalyticsService.cs(51,48): warning CS8602: Dereference of a possibly null reference. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\CamundaService.cs(76,18): warning CS8602: Dereference of a possibly null reference. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\CamundaService.cs(123,49): warning CS8604: Possible null reference argument for parameter 'content' in 'StringContent.StringContent(string content, Encoding? encoding, string? mediaType)'. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
+  BpmnWorkflow.Application -> C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\bin\Debug\net10.0\BpmnWorkflow.Application.dll
 
-Build FAILED.
+Build succeeded.
 
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\AnalyticsService.cs(51,48): warning CS8602: Dereference of a possibly null reference. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\CamundaService.cs(76,18): warning CS8602: Dereference of a possibly null reference. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
 C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\CamundaService.cs(123,49): warning CS8604: Possible null reference argument for parameter 'content' in 'StringContent.StringContent(string content, Encoding? encoding, string? mediaType)'. [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
-C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\Services\Camunda8Service.cs(102,24): error CS1061: 'IZeebeClientTransportBuilder' does not contain a definition for 'Build' and no accessible extension method 'Build' accepting a first argument of type 'IZeebeClientTransportBuilder' could be found (are you missing a using directive or an assembly reference?) [C:\Users\user\Desktop\New folder\BPMN Workflow Designer\Server\BpmnWorkflow.Application\BpmnWorkflow.Application.csproj]
     3 Warning(s)
-    1 Error(s)
+    0 Error(s)
 
-Time Elapsed 00:00:06.47
+Time Elapsed 00:00:05.91

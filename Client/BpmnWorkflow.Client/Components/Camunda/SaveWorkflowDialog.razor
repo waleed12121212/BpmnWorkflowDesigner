@@ -1,0 +1,48 @@
+@inject Radzen.DialogService DialogService
+
+<div class="p-3">
+    <div class="mb-3">
+        <RadzenLabel Text="Workflow Name" Component="WorkflowName" class="d-block mb-1" />
+        <RadzenTextBox @bind-Value="@workflowName" Name="WorkflowName" Style="width: 100%" />
+        @if (string.IsNullOrWhiteSpace(workflowName))
+        {
+            <small class="text-danger d-block mt-1">Name is required</small>
+        }
+    </div>
+
+    <div class="mb-3">
+        <RadzenLabel Text="Description" class="d-block mb-1" />
+        <RadzenTextArea @bind-Value="@workflowDescription" Style="width: 100%" Rows="3" />
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 pt-2">
+        <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@(() => DialogService.Close(null))" />
+        <RadzenButton Text="Save" ButtonStyle="ButtonStyle.Primary" Click="@Save" Disabled="@string.IsNullOrWhiteSpace(workflowName)" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? DefaultName { get; set; }
+    
+    private string workflowName = "";
+    private string workflowDescription = "";
+
+    protected override void OnInitialized()
+    {
+        workflowName = DefaultName ?? "New Workflow";
+    }
+
+    private void Save()
+    {
+        if (!string.IsNullOrWhiteSpace(workflowName))
+        {
+            DialogService.Close(new SaveResult { Name = workflowName, Description = workflowDescription });
+        }
+    }
+
+    public class SaveResult
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+}

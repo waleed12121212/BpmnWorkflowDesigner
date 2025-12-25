@@ -1,0 +1,76 @@
+@using BpmnWorkflow.Client.Models
+@inject Radzen.DialogService DialogService
+@inject CamundaEnvironmentClientService EnvService
+
+<div class="p-3">
+    @if (loading)
+    {
+        <div class="text-center py-4">
+            <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+            <p class="mt-2 text-muted">Loading environments...</p>
+        </div>
+    }
+    else if (!environments.Any())
+    {
+        <div class="alert alert-warning">
+            No Camunda environments configured. Please add one in settings first.
+        </div>
+        <div class="text-end mt-3">
+            <RadzenButton Text="Close" ButtonStyle="ButtonStyle.Light" Click="@(() => DialogService.Close(null))" />
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <RadzenLabel Text="Deployment Name" class="d-block mb-1" />
+            <RadzenTextBox @bind-Value="@deploymentName" Style="width: 100%" />
+        </div>
+
+        <div class="mb-3">
+            <RadzenLabel Text="Select Environment" class="d-block mb-1" />
+            <RadzenDropDown @bind-Value="@selectedEnvId" Data="@environments" 
+                            TextProperty="Name" ValueProperty="Id" 
+                            Style="width: 100%" />
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 pt-2">
+            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@(() => DialogService.Close(null))" />
+            <RadzenButton Text="Deploy" ButtonStyle="ButtonStyle.Primary" Click="@Deploy" 
+                          Disabled="@(selectedEnvId == null || string.IsNullOrWhiteSpace(deploymentName))" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? DefaultName { get; set; }
+    
+    private List<CamundaEnvironmentDto> environments = new();
+    private Guid? selectedEnvId;
+    private string deploymentName = "";
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        deploymentName = DefaultName ?? "New Deployment";
+        try {
+            environments = await EnvService.GetAllAsync();
+            selectedEnvId = environments.FirstOrDefault(e => e.IsActive)?.Id ?? environments.FirstOrDefault()?.Id;
+        } finally {
+            loading = false;
+        }
+    }
+
+    private void Deploy()
+    {
+        if (selectedEnvId.HasValue)
+        {
+            DialogService.Close(new DeployResult { EnvironmentId = selectedEnvId.Value, Name = deploymentName });
+        }
+    }
+
+    public class DeployResult
+    {
+        public Guid EnvironmentId { get; set; }
+        public string Name { get; set; } = "";
+    }
+}

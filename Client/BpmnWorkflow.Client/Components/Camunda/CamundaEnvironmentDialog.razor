@@ -43,6 +43,16 @@
 
         <div class="row mb-3">
             <div class="col-md-4">
+                <RadzenLabel Text="Zeebe Gateway (gRPC)" />
+            </div>
+            <div class="col-md-8">
+                <RadzenTextBox @bind-Value="@_model.ZeebeGatewayUrl" Style="width: 100%" Name="ZeebeGateway" Placeholder="localhost:26500" />
+                <RadzenRequiredValidator Component="ZeebeGateway" Text="Zeebe Gateway is required for C8" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
                 <RadzenLabel Text="Description" />
             </div>
             <div class="col-md-8">
@@ -74,6 +84,7 @@
                 BaseUrl = Environment.BaseUrl,
                 Username = Environment.Username,
                 Password = Environment.Password,
+                ZeebeGatewayUrl = Environment.ZeebeGatewayUrl,
                 Description = Environment.Description
             };
         }
@@ -81,7 +92,8 @@
         {
             _model = new CamundaEnvironmentUpsertDto
             {
-                BaseUrl = "http://localhost:8080/engine-rest/"
+                BaseUrl = "http://localhost:8081/v1/",
+                ZeebeGatewayUrl = "localhost:26500"
             };
         }
     }

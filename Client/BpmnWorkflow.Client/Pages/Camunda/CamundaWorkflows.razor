@@ -1,0 +1,209 @@
+@page "/camunda/workflows"
+@using BpmnWorkflow.Client.Models
+@using BpmnWorkflow.Client.Services
+@inject CamundaClientService CamundaService
+@inject CamundaEnvironmentClientService EnvService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+
+<PageTitle>Camunda Workflows</PageTitle>
+
+<div class="dashboard-wrapper" style="padding: 2rem; background: #f8fafc; min-height: 100vh;">
+    <RadzenStack Gap="2rem">
+        @* Header Section *@
+        <RadzenRow AlignItems="AlignItems.Center">
+            <RadzenColumn Size="12" SizeMD="6">
+                <RadzenText TextStyle="TextStyle.H3" TagName="TagName.H1" Style="font-weight: 800; color: #1e293b; margin: 0;">
+                    Deployed Workflows
+                </RadzenText>
+                <RadzenText TextStyle="TextStyle.Subtitle1" Style="color: #64748b;">
+                    Manage and inspect process definitions across your environments.
+                </RadzenText>
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="6" class="rz-text-align-end">
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="1rem">
+                    <RadzenDropDown @bind-Value="@selectedEnvironmentId" Data="@environments" 
+                                    TextProperty="Name" ValueProperty="Id" 
+                                    Style="width: 250px; border-radius: 12px;" 
+                                    Change="@RefreshAsync" />
+                    
+                    <RadzenButton Icon="refresh" Text="Refresh" Click="@RefreshAsync" 
+                                  ButtonStyle="ButtonStyle.Primary" Style="border-radius: 12px; box-shadow: 0 4px 12px rgba(79, 172, 254, 0.2);" />
+                    
+                    <RadzenButton Icon="add" Text="Deploy New" Click="@(() => Navigation.NavigateTo("/camunda-modeler"))" 
+                                  ButtonStyle="ButtonStyle.Success" Style="border-radius: 12px;" />
+                </RadzenStack>
+            </RadzenColumn>
+        </RadzenRow>
+
+        @if (isLoading)
+        {
+            <div style="height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;">
+                <RadzenProgressBarCircular Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+                <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #64748b;">Loading definitions...</RadzenText>
+            </div>
+        }
+        else if (definitions == null || !definitions.Any())
+        {
+            <RadzenCard Style="border-radius: 16px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; padding: 4rem;">
+                <RadzenIcon Icon="layers_clear" Style="font-size: 4rem; color: #cbd5e1; margin-bottom: 1rem;" />
+                <RadzenText TextStyle="TextStyle.H5" Style="font-weight: bold; color: #1e293b;">No Workflows Found</RadzenText>
+                <RadzenText TextStyle="TextStyle.Subtitle1" Style="color: #64748b; margin-bottom: 1.5rem;">
+                    No process definitions are deployed to the selected environment.
+                </RadzenText>
+                <RadzenButton Text="Go to Modeler" Click="@(() => Navigation.NavigateTo("/camunda-modeler"))" ButtonStyle="ButtonStyle.Primary" />
+            </RadzenCard>
+        }
+        else
+        {
+            <RadzenRow Gap="1.5rem">
+                @foreach (var def in definitions)
+                {
+                    <RadzenColumn Size="12" SizeMD="6" SizeLG="4" SizeXL="3">
+                        <RadzenCard Style="border-radius: 16px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05); padding: 0; overflow: hidden; height: 100%;">
+                            <div style="padding: 1.5rem; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">
+                                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Start">
+                                    <div class="version-badge">v@def.Version</div>
+                                    <RadzenMenu Style="background: transparent; border: none; padding: 0;">
+                                        <RadzenMenuItem Icon="more_vert" Style="color: white; padding: 0;">
+                                            <RadzenMenuItem Text="Start Instance" Icon="play_arrow" Click="@(() => StartInstance(def.Key))" />
+                                            <RadzenMenuItem Text="Delete Deployment" Icon="delete" Click="@(() => DeleteDeployment(def.DeploymentId))" Style="color: #ef4444;" />
+                                        </RadzenMenuItem>
+                                    </RadzenMenu>
+                                </RadzenStack>
+                                <RadzenText TextStyle="TextStyle.H6" Style="color: white; font-weight: 800; margin-top: 1rem; margin-bottom: 0;">@def.Name</RadzenText>
+                                <RadzenText TextStyle="TextStyle.Caption" Style="color: rgba(255,255,255,0.8);">KEY: @def.Key</RadzenText>
+                            </div>
+                            <div style="padding: 1.5rem;">
+                                <RadzenStack Gap="0.75rem">
+                                    <div class="info-row">
+                                        <span class="label">Category:</span>
+                                        <span class="value">@(string.IsNullOrEmpty(def.Category) ? "Default" : def.Category)</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Deployment ID:</span>
+                                        <span class="value text-truncate" title="@def.DeploymentId">@def.DeploymentId</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="label">Status:</span>
+                                        <span class="value">
+                                            <RadzenBadge BadgeStyle="@(def.Suspended ? BadgeStyle.Danger : BadgeStyle.Success)" 
+                                                         Text="@(def.Suspended ? "Suspended" : "Active")" IsPill="true" />
+                                        </span>
+                                    </div>
+                                    <hr style="margin: 0.5rem 0; opacity: 0.1;" />
+                                    <RadzenButton Text="View Instances" Icon="visibility" 
+                                                  ButtonStyle="ButtonStyle.Light" Style="border-radius: 12px; width: 100%;" 
+                                                  Click="@(() => Navigation.NavigateTo($"/camunda/processes?processDefinitionKey={def.Key}"))" />
+                                </RadzenStack>
+                            </div>
+                        </RadzenCard>
+                    </RadzenColumn>
+                }
+            </RadzenRow>
+        }
+    </RadzenStack>
+</div>
+
+<style>
+    .dashboard-wrapper {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .version-badge {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.25rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        backdrop-filter: blur(4px);
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+    }
+
+    .info-row .label {
+        color: #94a3b8;
+    }
+
+    .info-row .value {
+        color: #1e293b;
+        font-weight: 600;
+        max-width: 150px;
+    }
+
+    .rz-menu-item-content {
+        color: inherit !important;
+    }
+</style>
+
+@code {
+    private List<ProcessDefinitionDto> definitions = new();
+    private List<CamundaEnvironmentDto> environments = new();
+    private Guid? selectedEnvironmentId;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try {
+            environments = await EnvService.GetAllAsync();
+            var active = environments.FirstOrDefault(e => e.IsActive);
+            selectedEnvironmentId = active?.Id ?? environments.FirstOrDefault()?.Id;
+            
+            await RefreshAsync();
+        } catch (Exception ex) {
+            Console.WriteLine($"Init Error: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        isLoading = true;
+        try
+        {
+            definitions = await CamundaService.GetProcessDefinitionsAsync(selectedEnvironmentId);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Fetch Error", "Could not load process definitions.");
+            Console.WriteLine($"Refresh Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task StartInstance(string key)
+    {
+        try {
+            var res = await CamundaService.StartProcessInstanceAsync(new StartProcessInstanceRequest { ProcessDefinitionKey = key }, selectedEnvironmentId);
+            NotificationService.Notify(NotificationSeverity.Success, "Started", $"Instance {res?.Id} started successfully.");
+        } catch (Exception ex) {
+            NotificationService.Notify(NotificationSeverity.Error, "Start Error", ex.Message);
+        }
+    }
+
+    private async Task DeleteDeployment(string deploymentId)
+    {
+        bool? confirm = await DialogService.Confirm("Are you sure you want to delete this deployment? This may delete all associated process instances.", "Delete Deployment", 
+            new ConfirmOptions { OkButtonText = "Yes, Delete", CancelButtonText = "Cancel" });
+
+        if (confirm == true)
+        {
+            try {
+                if (await CamundaService.DeleteDeploymentAsync(deploymentId))
+                {
+                    NotificationService.Notify(NotificationSeverity.Success, "Deleted", "Deployment removed successfully.");
+                    await RefreshAsync();
+                }
+            } catch (Exception ex) {
+                NotificationService.Notify(NotificationSeverity.Error, "Delete Error", ex.Message);
+            }
+        }
+    }
+}

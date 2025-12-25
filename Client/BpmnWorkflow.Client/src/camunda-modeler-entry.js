@@ -84,33 +84,37 @@ export async function loadTemplates(url) {
     }
 }
 
+export async function exportXML() {
+    if (!modelerInstance) return null;
+    const { xml } = await modelerInstance.saveXML({ format: true });
+    return xml;
+}
+
 export function triggerOpenFile() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.bpmn, .xml';
-    input.onchange = e => {
+    input.onchange = async (e) => {
         const file = e.target.files[0];
+        if (!file) return;
+
         const reader = new FileReader();
-        reader.onload = async (readerEvent) => {
-            const content = readerEvent.target.result;
-            await importXML(content);
+        reader.onload = async (event) => {
+            const xml = event.target.result;
+            await importXML(xml);
         };
-        reader.readAsText(file, 'UTF-8');
+        reader.readAsText(file);
     };
     input.click();
 }
 
-// Global utility for downloading
-window.downloadFileFromStream = function (filename, content) {
+export function downloadFileFromStream(fileName, content) {
     const blob = new Blob([content], { type: 'application/xml' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    }, 0);
-};
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = fileName ?? 'diagram.bpmn';
+    anchorElement.click();
+    anchorElement.remove();
+    URL.revokeObjectURL(url);
+}

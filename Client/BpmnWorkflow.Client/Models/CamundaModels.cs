@@ -2,6 +2,15 @@ namespace BpmnWorkflow.Client.Models;
 
 // ========== Deployment Models ==========
 
+public class DeployWorkflowRequest
+{
+    public Guid WorkflowId { get; set; }
+    public string DeploymentName { get; set; } = string.Empty;
+    public string BpmnXml { get; set; } = string.Empty;
+    public bool EnableDuplicateFiltering { get; set; } = true;
+    public bool DeployChangedOnly { get; set; } = true;
+}
+
 public class DeployWorkflowResponse
 {
     public string DeploymentId { get; set; } = string.Empty;
@@ -167,6 +176,7 @@ public class CamundaEnvironmentDto
     public string? Password { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? ZeebeGatewayUrl { get; set; }
     public string? Description { get; set; }
 }
 
@@ -176,5 +186,6 @@ public class CamundaEnvironmentUpsertDto
     public string BaseUrl { get; set; } = string.Empty;
     public string? Username { get; set; }
     public string? Password { get; set; }
+    public string? ZeebeGatewayUrl { get; set; }
     public string? Description { get; set; }
 }

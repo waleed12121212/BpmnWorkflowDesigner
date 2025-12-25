@@ -62,7 +62,8 @@ builder.Services.AddScoped<ICamundaEnvironmentService, CamundaEnvironmentService
 builder.Services.AddHostedService<BpmnWorkflow.Infrastructure.Background.CamundaWorker>();
 
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<ICamundaService, CamundaService>();
+// Switch to Camunda 8 implementation
+builder.Services.AddScoped<ICamundaService, Camunda8Service>();
 
 // Configure JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];

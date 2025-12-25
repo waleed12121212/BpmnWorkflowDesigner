@@ -2,6 +2,7 @@
 @using BpmnWorkflow.Client.Models
 @using BpmnWorkflow.Client.Services
 @inject CamundaClientService CamundaService
+@inject CamundaEnvironmentClientService EnvService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
 @inject DialogService DialogService
@@ -17,7 +18,12 @@
             </RadzenText>
         </RadzenColumn>
         <RadzenColumn Size="12" SizeMD="6" class="rz-text-align-end">
-            <RadzenButton Icon="refresh" Text="Refresh" Click="@LoadTasks" Variant="Variant.Flat" />
+            <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="1rem">
+                <RadzenDropDown TValue="Guid?" Data="@environments" TextProperty="Name" ValueProperty="Id" 
+                                @bind-Value="@selectedEnvironmentId" Change="@LoadTasks"
+                                Placeholder="Select Environment" Style="width: 250px; border-radius: 12px;" />
+                <RadzenButton Icon="refresh" Text="Refresh" Click="@LoadTasks" Variant="Variant.Flat" />
+            </RadzenStack>
         </RadzenColumn>
     </RadzenRow>
 
@@ -209,6 +215,9 @@
     private bool isLoading = true;
     private string currentUserId = string.Empty;
     
+    private List<CamundaEnvironmentDto> environments = new();
+    private Guid? selectedEnvironmentId;
+    
     private string selectedFilter = "My Tasks";
     private List<string> filterOptions = new() { "My Tasks", "Unassigned", "All Tasks" };
     
@@ -224,6 +233,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        environments = await EnvService.GetAllAsync();
+        selectedEnvironmentId = environments.FirstOrDefault(e => e.IsActive)?.Id ?? environments.FirstOrDefault()?.Id;
+        
         await GetCurrentUser();
         await LoadTasks();
     }
@@ -241,11 +253,11 @@
         {
             if (!string.IsNullOrEmpty(ProcessInstanceId))
             {
-                allTasks = await CamundaService.GetUserTasksAsync(processInstanceId: ProcessInstanceId);
+                allTasks = await CamundaService.GetUserTasksAsync(processInstanceId: ProcessInstanceId, environmentId: selectedEnvironmentId);
             }
             else
             {
-                allTasks = await CamundaService.GetUserTasksAsync();
+                allTasks = await CamundaService.GetUserTasksAsync(environmentId: selectedEnvironmentId);
             }
             ApplyFilters();
         }

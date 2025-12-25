@@ -55,8 +55,13 @@
                         </div>
 
                         <div class="mb-3">
-                            <small class="text-muted d-block">Base URL</small>
+                            <small class="text-muted d-block">Base URL (Operate)</small>
                             <code class="text-primary truncate-url">@env.BaseUrl</code>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">Zeebe Gateway (gRPC/REST)</small>
+                            <code class="text-info truncate-url">@(env.ZeebeGatewayUrl ?? "Not Configured")</code>
                         </div>
 
                         @if (!string.IsNullOrEmpty(env.Description))

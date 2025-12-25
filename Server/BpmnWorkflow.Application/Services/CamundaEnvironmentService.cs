@@ -42,6 +42,7 @@ namespace BpmnWorkflow.Application.Services
                 BaseUrl = dto.BaseUrl,
                 Username = dto.Username,
                 Password = dto.Password,
+                ZeebeGatewayUrl = dto.ZeebeGatewayUrl,
                 Description = dto.Description,
                 IsActive = !await _context.CamundaEnvironments.AnyAsync() // First one is active
             };
@@ -60,6 +61,7 @@ namespace BpmnWorkflow.Application.Services
             env.BaseUrl = dto.BaseUrl;
             env.Username = dto.Username;
             env.Password = dto.Password;
+            env.ZeebeGatewayUrl = dto.ZeebeGatewayUrl;
             env.Description = dto.Description;
 
             await _context.SaveChangesAsync();
@@ -121,6 +123,7 @@ namespace BpmnWorkflow.Application.Services
                 Password = env.Password,
                 IsActive = env.IsActive,
                 CreatedAt = env.CreatedAt,
+                ZeebeGatewayUrl = env.ZeebeGatewayUrl,
                 Description = env.Description
             };
         }

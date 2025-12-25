@@ -33,9 +33,18 @@ public class CamundaService : ICamundaService
         };
     }
 
-    private async Task<HttpClient> GetClientAsync()
+    private async Task<HttpClient> GetClientAsync(Guid? environmentId = null)
     {
-        var env = await _envService.GetActiveAsync();
+        CamundaEnvironmentDto? env = null;
+        if (environmentId.HasValue)
+        {
+            env = await _envService.GetByIdAsync(environmentId.Value);
+        }
+        else
+        {
+            env = await _envService.GetActiveAsync();
+        }
+
         if (env == null)
         {
             throw new InvalidOperationException("No active Camunda environment found. Please configure and activate an environment in the Camunda Environments page.");
@@ -55,7 +64,7 @@ public class CamundaService : ICamundaService
 
     // ========== Deployment Operations ==========
 
-    public async Task<DeployWorkflowResponse> DeployWorkflowAsync(DeployWorkflowRequest request, CancellationToken cancellationToken = default)
+    public async Task<DeployWorkflowResponse> DeployWorkflowAsync(DeployWorkflowRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -89,6 +98,13 @@ public class CamundaService : ICamundaService
                             {
                                 process.Add(new System.Xml.Linq.XAttribute(System.Xml.Linq.XName.Get("historyTimeToLive", nsCamunda), "180"));
                             }
+                            
+                            // Also ensure isExecutable is true
+                            var isExecAttr = process.Attribute("isExecutable");
+                            if (isExecAttr == null || isExecAttr.Value.ToLower() != "true")
+                            {
+                                process.SetAttributeValue("isExecutable", "true");
+                            }
                         }
                         xml = xdoc.ToString();
                     }
@@ -114,7 +130,7 @@ public class CamundaService : ICamundaService
             var bpmnContent = new StringContent(xml ?? request.BpmnXml, Encoding.UTF8, "application/xml");
             content.Add(bpmnContent, "data", "process.bpmn");
 
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             _logger.LogInformation("Sending POST to {Url}", client.BaseAddress + "deployment/create");
             
             var response = await client.PostAsync("deployment/create", content, cancellationToken);
@@ -203,11 +219,11 @@ public class CamundaService : ICamundaService
         }
     }
 
-    public async Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ProcessDefinitionDto>> GetProcessDefinitionsAsync(Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.GetAsync("process-definition?latestVersion=true", cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -303,11 +319,11 @@ public class CamundaService : ICamundaService
 
     // ========== Process Instance Operations ==========
 
-    public async Task<ProcessInstanceDto> StartProcessInstanceAsync(StartProcessInstanceRequest request, CancellationToken cancellationToken = default)
+    public async Task<ProcessInstanceDto> StartProcessInstanceAsync(StartProcessInstanceRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Starting process instance for key {Key}", request.ProcessDefinitionKey);
+            _logger.LogInformation("Starting C7 process instance for key {Key}", request.ProcessDefinitionKey);
 
             var payload = new
             {
@@ -318,7 +334,7 @@ public class CamundaService : ICamundaService
                 )
             };
 
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.PostAsJsonAsync($"process-definition/key/{request.ProcessDefinitionKey}/start", payload, _jsonOptions, cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -343,11 +359,11 @@ public class CamundaService : ICamundaService
         }
     }
 
-    public async Task<ProcessInstanceDto?> GetProcessInstanceAsync(string processInstanceId, CancellationToken cancellationToken = default)
+    public async Task<ProcessInstanceDto?> GetProcessInstanceAsync(string processInstanceId, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.GetAsync($"process-instance/{processInstanceId}", cancellationToken);
             
             if (!response.IsSuccessStatusCode)
@@ -374,7 +390,7 @@ public class CamundaService : ICamundaService
         }
     }
 
-    public async Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null, CancellationToken cancellationToken = default)
+    public async Task<List<ProcessInstanceDto>> GetProcessInstancesAsync(string? processDefinitionKey = null, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -382,7 +398,7 @@ public class CamundaService : ICamundaService
             if (!string.IsNullOrEmpty(processDefinitionKey))
                 url += $"?processDefinitionKey={processDefinitionKey}";
 
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.GetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -392,7 +408,7 @@ public class CamundaService : ICamundaService
                 return new List<ProcessInstanceDto>();
 
             // Fetch definitions to map names
-            var definitions = await GetProcessDefinitionsAsync(cancellationToken);
+            var definitions = await GetProcessDefinitionsAsync(null, cancellationToken);
             var definitionMap = definitions.ToDictionary(d => d.Id, d => d);
 
             return instances.Select(i => 
@@ -512,7 +528,7 @@ public class CamundaService : ICamundaService
 
     // ========== User Task Operations ==========
 
-    public async Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null, CancellationToken cancellationToken = default)
+    public async Task<List<UserTaskDto>> GetUserTasksAsync(string? assignee = null, string? processInstanceId = null, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -526,7 +542,7 @@ public class CamundaService : ICamundaService
             if (queryParams.Any())
                 url += "?" + string.Join("&", queryParams);
 
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.GetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -628,11 +644,11 @@ public class CamundaService : ICamundaService
         }
     }
 
-    public async Task<bool> CompleteTaskAsync(string taskId, CompleteTaskRequest request, CancellationToken cancellationToken = default)
+    public async Task<bool> CompleteTaskAsync(string taskId, CompleteTaskRequest request, Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Completing task {TaskId}", taskId);
+            _logger.LogInformation("Completing C7 task {TaskId}", taskId);
 
             var payload = new
             {
@@ -642,7 +658,7 @@ public class CamundaService : ICamundaService
                 )
             };
 
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
             var response = await client.PostAsJsonAsync($"task/{taskId}/complete", payload, _jsonOptions, cancellationToken);
             return response.IsSuccessStatusCode;
         }
@@ -808,12 +824,12 @@ public class CamundaService : ICamundaService
         }
     }
 
-    public async Task<DashboardStatsDto> GetDashboardStatsAsync(CancellationToken cancellationToken = default)
+    public async Task<DashboardStatsDto> GetDashboardStatsAsync(Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var stats = new DashboardStatsDto();
-            var client = await GetClientAsync();
+            var client = await GetClientAsync(environmentId);
 
             // 1. Get Active Process Instances Count
             var activeResponse = await client.GetAsync("process-instance/count", cancellationToken);
@@ -865,7 +881,7 @@ public class CamundaService : ICamundaService
                 if (rawStats != null)
                 {
                     // Get definition names for better display
-                    var definitions = await GetProcessDefinitionsAsync(cancellationToken);
+                    var definitions = await GetProcessDefinitionsAsync(environmentId, cancellationToken);
                     
                     stats.ProcessStats = rawStats.Select(rs => new ProcessStatsDto
                     {
@@ -918,16 +934,17 @@ public class CamundaService : ICamundaService
 
     // ========== Health Check ==========
 
-    public async Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> IsHealthyAsync(Guid? environmentId = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = await GetClientAsync();
-            var response = await client.GetAsync("engine", cancellationToken);
+            var client = await GetClientAsync(environmentId);
+            var response = await client.GetAsync("version", cancellationToken);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Camunda 7 Health Check Exception");
             return false;
         }
     }

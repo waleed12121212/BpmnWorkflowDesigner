@@ -61,6 +61,9 @@
 @code {
     [Parameter]
     public List<ProcessDefinitionDto> ProcessDefinitions { get; set; } = new();
+
+    [Parameter]
+    public Guid? EnvironmentId { get; set; }
     
     private bool isLoadingDefinitions = false;
     private string? selectedProcessKey;
@@ -84,7 +87,7 @@
         errorMessage = null;
         try
         {
-            ProcessDefinitions = await CamundaService.GetProcessDefinitionsAsync();
+            ProcessDefinitions = await CamundaService.GetProcessDefinitionsAsync(EnvironmentId);
             if (!ProcessDefinitions.Any())
             {
                 errorMessage = "No processes found. Please deploy a workflow first.";
@@ -133,7 +136,7 @@
                 Variables = variablesDict.Any() ? variablesDict : null
             };
 
-            var instance = await CamundaService.StartProcessInstanceAsync(request);
+            var instance = await CamundaService.StartProcessInstanceAsync(request, EnvironmentId);
             
             if (instance != null)
             {

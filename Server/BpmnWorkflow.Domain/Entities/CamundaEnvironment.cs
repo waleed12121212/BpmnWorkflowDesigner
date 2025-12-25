@@ -20,6 +20,9 @@ namespace BpmnWorkflow.Domain.Entities
 
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public string? ZeebeGatewayUrl { get; set; }
+
         public string? Description { get; set; }
     }
 }

@@ -35,7 +35,7 @@ public class CamundaController : ControllerBase
     /// Deploy a workflow to Camunda engine
     /// </summary>
     [HttpPost("deploy/{workflowId}")]
-    public async Task<ActionResult<DeployWorkflowResponse>> DeployWorkflow(Guid workflowId)
+    public async Task<ActionResult<DeployWorkflowResponse>> DeployWorkflow(Guid workflowId, [FromQuery] Guid? environmentId = null)
     {
         try
         {
@@ -57,7 +57,7 @@ public class CamundaController : ControllerBase
                 DeployChangedOnly = true
             };
 
-            var result = await _camundaService.DeployWorkflowAsync(request);
+            var result = await _camundaService.DeployWorkflowAsync(request, environmentId: environmentId);
 
             // Update workflow with Camunda deployment info
             await _workflowService.UpdateCamundaDeploymentInfoAsync(
@@ -91,6 +91,30 @@ public class CamundaController : ControllerBase
             }
             
             return StatusCode(500, new { error = "Failed to deploy workflow", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Deploy raw BPMN XML directly
+    /// </summary>
+    [HttpPost("deploy-xml")]
+    public async Task<ActionResult<DeployWorkflowResponse>> DeployRawXml([FromBody] BpmnWorkflow.Application.DTOs.Camunda.DeployWorkflowRequest request, [FromQuery] Guid? environmentId = null)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(request.BpmnXml))
+                return BadRequest("BPMN XML content is required");
+
+            if (string.IsNullOrEmpty(request.DeploymentName))
+                request.DeploymentName = "adhoc-deployment-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+
+            var result = await _camundaService.DeployWorkflowAsync(request, environmentId: environmentId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Error deploying raw XML");
+             return StatusCode(500, new { error = "Failed to deploy XML", details = ex.Message });
         }
     }
 
@@ -132,11 +156,11 @@ public class CamundaController : ControllerBase
     /// Get consolidated statistics for the dashboard
     /// </summary>
     [HttpGet("dashboard")]
-    public async Task<ActionResult<DashboardStatsDto>> GetDashboardStats()
+    public async Task<ActionResult<DashboardStatsDto>> GetDashboardStats([FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var stats = await _camundaService.GetDashboardStatsAsync();
+            var stats = await _camundaService.GetDashboardStatsAsync(environmentId: environmentId);
             return Ok(stats);
         }
         catch (InvalidOperationException ex)
@@ -155,11 +179,11 @@ public class CamundaController : ControllerBase
     /// Get all process definitions from Camunda
     /// </summary>
     [HttpGet("process-definitions")]
-    public async Task<ActionResult<List<ProcessDefinitionDto>>> GetProcessDefinitions()
+    public async Task<ActionResult<List<ProcessDefinitionDto>>> GetProcessDefinitions([FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var definitions = await _camundaService.GetProcessDefinitionsAsync();
+            var definitions = await _camundaService.GetProcessDefinitionsAsync(environmentId: environmentId);
             return Ok(definitions);
         }
         catch (HttpRequestException ex)
@@ -282,11 +306,11 @@ public class CamundaController : ControllerBase
     /// Start a new process instance
     /// </summary>
     [HttpPost("processes/start")]
-    public async Task<ActionResult<ProcessInstanceDto>> StartProcessInstance([FromBody] StartProcessInstanceRequest request)
+    public async Task<ActionResult<ProcessInstanceDto>> StartProcessInstance([FromBody] StartProcessInstanceRequest request, [FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var instance = await _camundaService.StartProcessInstanceAsync(request);
+            var instance = await _camundaService.StartProcessInstanceAsync(request, environmentId: environmentId);
             
             // Sync with local database to track the instance
             try 
@@ -358,11 +382,11 @@ public class CamundaController : ControllerBase
     /// Get all running process instances
     /// </summary>
     [HttpGet("processes")]
-    public async Task<ActionResult<List<ProcessInstanceDto>>> GetProcessInstances([FromQuery] string? processDefinitionKey = null)
+    public async Task<ActionResult<List<ProcessInstanceDto>>> GetProcessInstances([FromQuery] string? processDefinitionKey = null, [FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var instances = await _camundaService.GetProcessInstancesAsync(processDefinitionKey);
+            var instances = await _camundaService.GetProcessInstancesAsync(processDefinitionKey, environmentId);
             return Ok(instances);
         }
         catch (HttpRequestException ex)
@@ -386,11 +410,11 @@ public class CamundaController : ControllerBase
     /// Get process instance by ID
     /// </summary>
     [HttpGet("processes/{processInstanceId}")]
-    public async Task<ActionResult<ProcessInstanceDto>> GetProcessInstance(string processInstanceId)
+    public async Task<ActionResult<ProcessInstanceDto>> GetProcessInstance(string processInstanceId, [FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var instance = await _camundaService.GetProcessInstanceAsync(processInstanceId);
+            var instance = await _camundaService.GetProcessInstanceAsync(processInstanceId, environmentId);
             if (instance == null)
                 return NotFound($"Process instance {processInstanceId} not found");
 
@@ -497,11 +521,12 @@ public class CamundaController : ControllerBase
     [HttpGet("tasks")]
     public async Task<ActionResult<List<UserTaskDto>>> GetUserTasks(
         [FromQuery] string? assignee = null,
-        [FromQuery] string? processInstanceId = null)
+        [FromQuery] string? processInstanceId = null,
+        [FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var tasks = await _camundaService.GetUserTasksAsync(assignee, processInstanceId);
+            var tasks = await _camundaService.GetUserTasksAsync(assignee, processInstanceId, environmentId);
             return Ok(tasks);
         }
         catch (HttpRequestException ex)
@@ -677,11 +702,11 @@ public class CamundaController : ControllerBase
     /// </summary>
     [HttpGet("health")]
     [AllowAnonymous]
-    public async Task<IActionResult> HealthCheck()
+    public async Task<IActionResult> HealthCheck([FromQuery] Guid? environmentId = null)
     {
         try
         {
-            var isHealthy = await _camundaService.IsHealthyAsync();
+            var isHealthy = await _camundaService.IsHealthyAsync(environmentId: environmentId);
             if (isHealthy)
                 return Ok(new { status = "healthy", message = "Camunda engine is running" });
             

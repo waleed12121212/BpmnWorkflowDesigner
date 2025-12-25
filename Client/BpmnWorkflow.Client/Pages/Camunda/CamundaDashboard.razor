@@ -2,6 +2,7 @@
 @using BpmnWorkflow.Client.Models
 @using BpmnWorkflow.Client.Services
 @inject CamundaClientService CamundaService
+@inject CamundaEnvironmentClientService EnvService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
 
@@ -21,6 +22,9 @@
             </RadzenColumn>
             <RadzenColumn Size="12" SizeMD="4" class="rz-text-align-end">
                 <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="1rem">
+                    <RadzenDropDown TValue="Guid?" Data="@environments" TextProperty="Name" ValueProperty="Id" 
+                                    @bind-Value="@selectedEnvironmentId" Change="@(async () => await LoadDashboardData())"
+                                    Placeholder="Select Environment" Style="width: 250px; border-radius: 12px;" />
                     <div class="health-indicator @(isHealthy ? "healthy" : "unhealthy")" title="@healthMessage">
                         <span class="dot"></span>
                         @healthMessage
@@ -320,8 +324,13 @@
     private bool isHealthy = false;
     private string healthMessage = "Initializing...";
 
+    private List<CamundaEnvironmentDto> environments = new();
+    private Guid? selectedEnvironmentId;
+
     protected override async Task OnInitializedAsync()
     {
+        environments = await EnvService.GetAllAsync();
+        selectedEnvironmentId = environments.FirstOrDefault(e => e.IsActive)?.Id ?? environments.FirstOrDefault()?.Id;
         await LoadDashboardData();
     }
 
@@ -330,13 +339,17 @@
         isLoading = true;
         try
         {
-            var result = await CamundaService.CheckHealthAsync();
+            var result = await CamundaService.CheckHealthAsync(selectedEnvironmentId);
             isHealthy = result.IsHealthy;
             healthMessage = result.Message;
 
             if (isHealthy)
             {
-                dashboardStats = await CamundaService.GetDashboardStatsAsync();
+                dashboardStats = await CamundaService.GetDashboardStatsAsync(selectedEnvironmentId);
+            }
+            else
+            {
+                dashboardStats = null;
             }
         }
         catch (Exception ex)
