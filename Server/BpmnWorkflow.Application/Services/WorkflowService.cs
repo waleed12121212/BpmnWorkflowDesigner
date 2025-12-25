@@ -40,7 +40,8 @@ namespace BpmnWorkflow.Application.Services
                     CreatedAt = w.CreatedAt,
                     UpdatedAt = w.UpdatedAt,
                     IsPublished = w.IsPublished,
-                    Version = w.Version
+                    Version = w.Version,
+                    Category = w.Tags
                 })
                 .ToListAsync();
         }
@@ -72,7 +73,8 @@ namespace BpmnWorkflow.Application.Services
                     CreatedAt = w.CreatedAt,
                     UpdatedAt = w.UpdatedAt,
                     IsPublished = w.IsPublished,
-                    Version = w.Version
+                    Version = w.Version,
+                    Category = w.Tags
                 })
                 .ToListAsync();
 
@@ -105,7 +107,8 @@ namespace BpmnWorkflow.Application.Services
                 CreatedAt = workflow.CreatedAt,
                 UpdatedAt = workflow.UpdatedAt,
                 IsPublished = workflow.IsPublished,
-                Version = workflow.Version
+                Version = workflow.Version,
+                Category = workflow.Tags
             };
         }
 
@@ -123,7 +126,8 @@ namespace BpmnWorkflow.Application.Services
                 UpdatedAt = DateTime.UtcNow,
                 IsPublished = false,
                 IsDeleted = false,
-                Version = 1
+                Version = 1,
+                Tags = request.Category
             };
 
             _context.Workflows.Add(newWorkflow);
@@ -157,7 +161,8 @@ namespace BpmnWorkflow.Application.Services
                 CreatedAt = newWorkflow.CreatedAt,
                 UpdatedAt = newWorkflow.UpdatedAt,
                 IsPublished = newWorkflow.IsPublished,
-                Version = newWorkflow.Version
+                Version = newWorkflow.Version,
+                Category = newWorkflow.Tags
             };
         }
 
@@ -169,12 +174,14 @@ namespace BpmnWorkflow.Application.Services
             var changes = new List<string>();
             if (existingWorkflow.Name != request.Name) changes.Add($"Name: '{existingWorkflow.Name}' -> '{request.Name}'");
             if (existingWorkflow.Description != request.Description) changes.Add("Description modified");
-            changes.Add($"Version increased to {existingWorkflow.Version}");
+            if (request.Category != null && existingWorkflow.Tags != request.Category) changes.Add($"Category: '{existingWorkflow.Tags}' -> '{request.Category}'");
+            changes.Add($"Version increased to {existingWorkflow.Version + 1}"); // Log the new version number
 
             existingWorkflow.Name = request.Name;
             existingWorkflow.Description = request.Description;
             if (request.BpmnXml != null) existingWorkflow.BpmnXml = request.BpmnXml;
             existingWorkflow.SvgPreview = request.SvgPreview;
+            if (request.Category != null) existingWorkflow.Tags = request.Category;
             existingWorkflow.UpdatedAt = DateTime.UtcNow;
             
             // Auto-increment version

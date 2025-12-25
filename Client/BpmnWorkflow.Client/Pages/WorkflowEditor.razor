@@ -14,7 +14,6 @@
 @inject ILocalStorageService LocalStorage
 @inject IJSRuntime JsRuntime
 @inject ICommentService CommentService
-@inject IFormService FormService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BpmnWorkflow.Client.Services.PowerPointExportService PowerPointService
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
@@ -233,15 +232,9 @@
                                             }
                                             else if (_selectedElement.Type == "bpmn:UserTask")
                                             {
-                                                <div>
-                                                    <RadzenText TextStyle="TextStyle.Subtitle2" Style="color: #888; font-size: 0.75rem;">Associated Form</RadzenText>
-                                                    <RadzenDropDown @bind-Value="@_selectedElement.FormId" Data="@_availableForms" TextProperty="Name" ValueProperty="Id" 
-                                                                    Style="width: 100%;" Placeholder="Select a form..." AllowClear="true"
-                                                                    Change="@(args => UpdateProperty("formId", args?.ToString()))" />
-                                                    <RadzenText TextStyle="TextStyle.Caption" Style="color: #aaa; margin-top: 0.5rem; display: block;">
-                                                        Choose a form created in the Form Designer to use for this task.
-                                                    </RadzenText>
-                                                </div>
+                                                <RadzenAlert Severity="Severity.Info" AllowClose="false" Size="AlertSize.Small">
+                                                    User Task properties can be configured via BPMN XML attributes.
+                                                </RadzenAlert>
                                             }
                                             else
                                             {
@@ -624,12 +617,10 @@
     private HubConnection? _hubConnection;
     private List<string> _activeUsers = new();
     private string? _hubUrl;
-    private IEnumerable<FormDefinitionDto> _availableForms = new List<FormDefinitionDto>();
+    
     
     protected override async Task OnInitializedAsync()
     {
-        _availableForms = await FormService.GetAllAsync();
-        
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)

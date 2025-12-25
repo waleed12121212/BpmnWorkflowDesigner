@@ -16,10 +16,6 @@
     <!-- Header Area -->
     <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
         <RadzenText TextStyle="TextStyle.H3" Style="margin: 0">Dashboard</RadzenText>
-        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
-            <RadzenButton Icon="palette" Text="Template Gallery" Click="@OpenTemplateGallery" ButtonStyle="ButtonStyle.Secondary" />
-            <RadzenButton Icon="add" Text="New Workflow" Click="@CreateNew" ButtonStyle="ButtonStyle.Primary" />
-        </RadzenStack>
     </RadzenStack>
 
     <!-- Stats Cards -->
@@ -98,7 +94,7 @@
                     <Template Context="workflow">
                         <RadzenCard Style="width: 380px; margin: 0.75rem; padding: 0; overflow: hidden; position: relative;" Class="workflow-card">
                             <!-- Thumbnail Area -->
-                            <div class="thumbnail-container" @onclick="@(() => NavigationManager.NavigateTo($"/workflow-editor/{workflow.Id}"))">
+                            <div class="thumbnail-container" @onclick="@(() => NavigateToEditor(workflow))">
                                 @if (!string.IsNullOrEmpty(workflow.SvgPreview))
                                 {
                                     <div class="svg-thumbnail">
@@ -113,7 +109,7 @@
                                 }
                                 <div class="card-overlay">
                                     <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Medium" 
-                                                  Click="@(() => OnEditWorkflow(workflow.Id))" />
+                                                  Click="@(() => OnViewWorkflow(workflow.Id))" />
                                 </div>
                             </div>
 
@@ -278,8 +274,29 @@
         return "Just now";
     }
 
-    private void OnEditWorkflow(Guid id) => NavigationManager.NavigateTo($"/workflow-editor/{id}");
-    private void OnViewWorkflow(Guid id) => NavigationManager.NavigateTo($"/workflow-preview/{id}");
+    private void NavigateToEditor(WorkflowDto workflow)
+    {
+        if (workflow.Category == "Camunda")
+        {
+            NavigationManager.NavigateTo($"/camunda-modeler?workflowId={workflow.Id}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo($"/workflow-preview/{workflow.Id}");
+        }
+    }
+
+    private void OnEditWorkflow(Guid id) 
+    {
+        var workflow = _allWorkflows.FirstOrDefault(w => w.Id == id);
+        if (workflow != null) NavigateToEditor(workflow);
+    }
+
+    private void OnViewWorkflow(Guid id)
+    {
+         var workflow = _allWorkflows.FirstOrDefault(w => w.Id == id);
+         if (workflow != null) NavigationManager.NavigateTo($"/workflow-preview/{id}");
+    }
     private async Task OnDeleteWorkflow(Guid id) => await DeleteWorkflow(id);
 
     private async Task OpenTemplateGallery()
@@ -297,7 +314,6 @@
                                 <RadzenText TextStyle="TextStyle.H6" Style="margin: 0;">Simple Approval</RadzenText>
                                 <RadzenText TextStyle="TextStyle.Body2">A linear process for basic approval tasks between a requestor and a manager.</RadzenText>
                             </RadzenStack>
-                            <RadzenButton Text="Use Template" Click="@(() => UseTemplate(BpmnTemplates.SimpleApproval, "Simple Approval Process"))" ButtonStyle="ButtonStyle.Primary" Style="margin-top: 1rem;" />
                         </RadzenCard>
                     </RadzenColumn>
                     <RadzenColumn Size="12" SizeMD="6">
@@ -309,7 +325,6 @@
                                 <RadzenText TextStyle="TextStyle.H6" Style="margin: 0;">Customer Onboarding</RadzenText>
                                 <RadzenText TextStyle="TextStyle.Body2">Includes decision gateways, user tasks, and multiple end states for onboarding customers.</RadzenText>
                             </RadzenStack>
-                            <RadzenButton Text="Use Template" Click="@(() => UseTemplate(BpmnTemplates.CustomerOnboarding, "Customer Onboarding"))" ButtonStyle="ButtonStyle.Primary" Style="margin-top: 1rem;" />
                         </RadzenCard>
                     </RadzenColumn>
                 </RadzenRow>
@@ -319,18 +334,9 @@
             </RadzenStack>, new DialogOptions { Width = "800px" });
     }
 
-    private async Task UseTemplate(string xml, string name)
-    {
-        await JsRuntime.InvokeVoidAsync("localStorage.setItem", "new_workflow_template", xml);
-        await JsRuntime.InvokeVoidAsync("localStorage.setItem", "new_workflow_name", name);
-        NavigationManager.NavigateTo("/workflow-editor");
-        DialogService.Close();
-    }
 
-    private void CreateNew()
-    {
-        NavigationManager.NavigateTo("/workflow-editor");
-    }
+
+
 
     private class StatsModel
     {

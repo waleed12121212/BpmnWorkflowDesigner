@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject Services.IAuthService AuthService
 @inject Radzen.DialogService DialogService
@@ -46,9 +46,6 @@
         <RadzenPanelMenu>
             <RadzenPanelMenuItem Text="Dashboard" Icon="dashboard" Path="/" Match="NavLinkMatch.All" />
             <RadzenPanelMenuItem Text="Workflows" Icon="account_tree" Path="workflows" />
-            <RadzenPanelMenuItem Text="New Workflow" Icon="add_circle" Path="workflow-editor" />
-            <RadzenPanelMenuItem Text="Form Designer" Icon="description" Path="forms" />
-            <RadzenPanelMenuItem Text="DMN Decisions" Icon="table_chart" Path="dmn-decisions" />
             <RadzenPanelMenuItem Text="Analytics" Icon="analytics" Path="analytics" />
             
             <RadzenPanelMenuItem Text="Camunda Platform" Icon="account_tree">

@@ -23,6 +23,7 @@
 
 @code {
     [Parameter] public string? DefaultName { get; set; }
+    [Parameter] public string? DefaultDescription { get; set; }
     
     private string workflowName = "";
     private string workflowDescription = "";
@@ -30,6 +31,7 @@
     protected override void OnInitialized()
     {
         workflowName = DefaultName ?? "New Workflow";
+        workflowDescription = DefaultDescription ?? "";
     }
 
     private void Save()

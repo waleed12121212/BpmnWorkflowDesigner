@@ -17,6 +17,7 @@ namespace BpmnWorkflow.Client.Models
         public string? BpmnXml { get; set; }
         public string? SvgPreview { get; set; }
         public int Version { get; set; }
+        public string? Category { get; set; }
     }
 }
 

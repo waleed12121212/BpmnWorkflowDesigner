@@ -12,10 +12,6 @@ namespace BpmnWorkflow.Application.Interfaces
         DbSet<WorkflowVersion> WorkflowVersions { get; }
         DbSet<AuditLog> AuditLogs { get; }
         DbSet<Comment> Comments { get; }
-        DbSet<FormDefinition> FormDefinitions { get; }
-        DbSet<FormVersion> FormVersions { get; }
-        DbSet<DmnDefinition> DmnDefinitions { get; }
-        DbSet<DmnVersion> DmnVersions { get; }
         DbSet<ProcessInstance> ProcessInstances { get; }
         DbSet<CamundaEnvironment> CamundaEnvironments { get; }
 

@@ -59,8 +59,6 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWorkflowService, WorkflowService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
-builder.Services.AddScoped<IFormService, FormService>();
-builder.Services.AddScoped<IDmnService, DmnService>();
 builder.Services.AddScoped<PowerPointExportService>();
 builder.Services.AddScoped<IBpmnInteropService, BpmnInteropService>();
 builder.Services.AddScoped<BpmnWorkflow.Client.Services.ThemeService>();

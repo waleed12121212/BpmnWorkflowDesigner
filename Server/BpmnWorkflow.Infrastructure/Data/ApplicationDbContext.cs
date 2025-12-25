@@ -17,10 +17,6 @@ namespace BpmnWorkflow.Infrastructure.Data
         public DbSet<WorkflowVersion> WorkflowVersions => Set<WorkflowVersion>();
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
         public DbSet<Comment> Comments => Set<Comment>();
-        public DbSet<FormDefinition> FormDefinitions => Set<FormDefinition>();
-        public DbSet<FormVersion> FormVersions => Set<FormVersion>();
-        public DbSet<DmnDefinition> DmnDefinitions => Set<DmnDefinition>();
-        public DbSet<DmnVersion> DmnVersions => Set<DmnVersion>();
         public DbSet<ProcessInstance> ProcessInstances => Set<ProcessInstance>();
         public DbSet<CamundaEnvironment> CamundaEnvironments => Set<CamundaEnvironment>();
 

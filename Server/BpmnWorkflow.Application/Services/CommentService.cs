@@ -68,24 +68,6 @@ namespace BpmnWorkflow.Application.Services
             };
         }
 
-        public async Task<IEnumerable<CommentDto>> GetFormCommentsAsync(Guid formId)
-        {
-            return await _context.Comments
-                .AsNoTracking()
-                .Where(c => c.FormId == formId)
-                .Include(c => c.User)
-                .OrderByDescending(c => c.CreatedAt)
-                .Select(c => new CommentDto
-                {
-                    Id = c.Id,
-                    FormId = c.FormId,
-                    UserId = c.UserId,
-                    UserName = c.User != null ? c.User.Username : "Unknown",
-                    Text = c.Text,
-                    CreatedAt = c.CreatedAt
-                })
-                .ToListAsync();
-        }
 
         public async Task<CommentDto> AddFormCommentAsync(Guid formId, Guid userId, string text)
         {
@@ -95,7 +77,6 @@ namespace BpmnWorkflow.Application.Services
             var comment = new Comment
             {
                 Id = Guid.NewGuid(),
-                FormId = formId,
                 UserId = userId,
                 Text = text,
                 CreatedAt = DateTime.UtcNow
@@ -107,7 +88,6 @@ namespace BpmnWorkflow.Application.Services
             return new CommentDto
             {
                 Id = comment.Id,
-                FormId = comment.FormId,
                 UserId = comment.UserId,
                 UserName = user.Username,
                 Text = comment.Text,
@@ -126,6 +106,11 @@ namespace BpmnWorkflow.Application.Services
             _context.Comments.Remove(comment);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        Task<IEnumerable<CommentDto>> ICommentService.GetFormCommentsAsync(Guid formId)
+        {
+            throw new NotImplementedException();
         }
     }
 }

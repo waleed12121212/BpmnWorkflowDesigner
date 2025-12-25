@@ -117,41 +117,6 @@ public class CamundaController : ControllerBase
              return StatusCode(500, new { error = "Failed to deploy XML", details = ex.Message });
         }
     }
-
-    /// <summary>
-    /// Deploy a DMN to Camunda engine
-    /// </summary>
-    [HttpPost("deploy-dmn/{dmnId}")]
-    public async Task<ActionResult<DeployWorkflowResponse>> DeployDmn(Guid dmnId)
-    {
-        try
-        {
-            var dmn = await _context.DmnDefinitions.FirstOrDefaultAsync(d => d.Id == dmnId && !d.IsDeleted);
-            if (dmn == null)
-                return NotFound($"DMN {dmnId} not found");
-
-            if (string.IsNullOrEmpty(dmn.DmnXml))
-                return BadRequest("DMN does not have XML content");
-
-            var result = await _camundaService.DeployDmnAsync(dmnId, dmn.Name, dmn.DmnXml);
-
-            _logger.LogInformation("DMN {DmnId} deployed to Camunda with deployment ID {DeploymentId}",
-                dmnId, result.DeploymentId);
-
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogWarning(ex, "Configuration error deploying DMN {DmnId}", dmnId);
-            return BadRequest(new { error = "Camunda configuration error", details = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deploying DMN {DmnId}", dmnId);
-            return StatusCode(500, new { error = "Failed to deploy DMN", details = ex.Message });
-        }
-    }
-
     /// <summary>
     /// Get consolidated statistics for the dashboard
     /// </summary>

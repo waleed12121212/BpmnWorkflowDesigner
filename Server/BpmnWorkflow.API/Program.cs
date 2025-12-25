@@ -56,8 +56,6 @@ builder.Services.AddScoped<IWorkflowService, WorkflowService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
-builder.Services.AddScoped<IFormService, FormService>();
-builder.Services.AddScoped<IDmnService, DmnService>();
 builder.Services.AddScoped<ICamundaEnvironmentService, CamundaEnvironmentService>();
 builder.Services.AddHostedService<BpmnWorkflow.Infrastructure.Background.CamundaWorker>();
 
@@ -124,6 +122,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<BpmnWorkflow.API.Hubs.WorkflowHub>("/hubs/workflow");
-app.MapHub<BpmnWorkflow.API.Hubs.FormHub>("/hubs/form");
 
 app.Run();

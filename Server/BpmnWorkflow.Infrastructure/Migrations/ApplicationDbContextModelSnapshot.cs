@@ -113,9 +113,6 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.Property<string>("ElementId")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("FormId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -127,8 +124,6 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("FormId");
 
                     b.HasIndex("UserId");
 
@@ -167,142 +162,6 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.HasIndex("Code");
 
                     b.ToTable("Departments");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.DmnDefinition", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DmnXml")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("OwnerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OwnerId");
-
-                    b.ToTable("DmnDefinitions");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.DmnVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("DmnId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("DmnXml")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("VersionNumber")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DmnId");
-
-                    b.ToTable("DmnVersions");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.FormDefinition", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("OwnerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("SchemaJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OwnerId");
-
-                    b.ToTable("FormDefinitions");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.FormVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("FormId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("SchemaJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("VersionNumber")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FormId");
-
-                    b.ToTable("FormVersions");
                 });
 
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.ProcessInstance", b =>
@@ -587,10 +446,6 @@ namespace BpmnWorkflow.Infrastructure.Migrations
 
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.Comment", b =>
                 {
-                    b.HasOne("BpmnWorkflow.Domain.Entities.FormDefinition", "Form")
-                        .WithMany()
-                        .HasForeignKey("FormId");
-
                     b.HasOne("BpmnWorkflow.Domain.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -601,55 +456,9 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("WorkflowId");
 
-                    b.Navigation("Form");
-
                     b.Navigation("User");
 
                     b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.DmnDefinition", b =>
-                {
-                    b.HasOne("BpmnWorkflow.Domain.Entities.User", "Owner")
-                        .WithMany()
-                        .HasForeignKey("OwnerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Owner");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.DmnVersion", b =>
-                {
-                    b.HasOne("BpmnWorkflow.Domain.Entities.DmnDefinition", "Dmn")
-                        .WithMany()
-                        .HasForeignKey("DmnId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Dmn");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.FormDefinition", b =>
-                {
-                    b.HasOne("BpmnWorkflow.Domain.Entities.User", "Owner")
-                        .WithMany()
-                        .HasForeignKey("OwnerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Owner");
-                });
-
-            modelBuilder.Entity("BpmnWorkflow.Domain.Entities.FormVersion", b =>
-                {
-                    b.HasOne("BpmnWorkflow.Domain.Entities.FormDefinition", "Form")
-                        .WithMany()
-                        .HasForeignKey("FormId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Form");
                 });
 
             modelBuilder.Entity("BpmnWorkflow.Domain.Entities.ProcessInstance", b =>

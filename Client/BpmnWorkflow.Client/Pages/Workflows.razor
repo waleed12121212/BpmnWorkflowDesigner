@@ -12,8 +12,6 @@
 <RadzenStack Gap="1rem">
     <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween">
         <RadzenText TextStyle="TextStyle.H3">Workflows</RadzenText>
-        <RadzenButton Icon="add" Text="New Workflow" ButtonStyle="ButtonStyle.Primary"
-                      Click="@CreateNew" />
     </RadzenStack>
 
     <RadzenCard>
@@ -34,9 +32,7 @@
                         <RadzenButton Icon="visibility" ButtonStyle="ButtonStyle.Info" Size="ButtonSize.Small" Class="rz-mr-1"
                                       Click="@(() => NavigationManager.NavigateTo($"/workflow-preview/{workflow.Id}"))" 
                                       title="Preview" />
-                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Class="rz-mr-1"
-                                      Click="@(() => NavigationManager.NavigateTo($"/workflow-editor/{workflow.Id}"))" 
-                                      title="Edit" />
+
                         <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
                                       Click="@(() => DeleteWorkflow(workflow))" 
                                       title="Delete" />
@@ -83,7 +79,7 @@
         await _grid.FirstPage();
     }
 
-    private void CreateNew() => NavigationManager.NavigateTo("/workflow-editor");
+
 
     private async Task DeleteWorkflow(BpmnWorkflow.Client.Models.WorkflowDto workflow)
     {
