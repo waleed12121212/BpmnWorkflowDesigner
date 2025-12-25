@@ -8,6 +8,7 @@
 @inject NavigationManager NavigationManager
 @inject Radzen.DialogService DialogService
 @inject IJSRuntime JsRuntime
+@implements IDisposable
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -208,6 +209,9 @@
     private bool _isLoading = true;
     private StatsModel _stats = new();
 
+    private bool _disposed;
+    public void Dispose() => _disposed = true;
+
     protected override async Task OnInitializedAsync()
     {
         try 
@@ -215,6 +219,9 @@
             _allWorkflows = (await WorkflowService.GetWorkflowsAsync()).ToList();
             _filteredWorkflows = _allWorkflows.OrderByDescending(w => w.UpdatedAt).ToList();
             CalculateStats();
+
+            // Start generation in background after initial load
+            _ = GenerateMissingPreviews();
         }
         catch (Exception ex)
         {
@@ -223,6 +230,33 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task GenerateMissingPreviews()
+    {
+        // Filter items that need preview
+        var items = _allWorkflows.Where(w => string.IsNullOrEmpty(w.SvgPreview) && !string.IsNullOrEmpty(w.BpmnXml)).ToList();
+
+        foreach (var wf in items)
+        {
+            if (_disposed) return;
+
+            try
+            {
+                var svg = await JsRuntime.InvokeAsync<string>("SvgExporter.getSvgFromXml", wf.BpmnXml);
+                if (!string.IsNullOrEmpty(svg))
+                {
+                    wf.SvgPreview = svg;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                 Console.WriteLine($"Err gen preview for {wf.Id}: {ex.Message}");
+            }
+            
+            await Task.Delay(50); // Small delay to yield UI thread
         }
     }
 
