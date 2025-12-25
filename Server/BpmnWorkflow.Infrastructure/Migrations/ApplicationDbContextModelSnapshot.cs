@@ -73,6 +73,15 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ClientId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClientSecret")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClusterId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -89,6 +98,12 @@ namespace BpmnWorkflow.Infrastructure.Migrations
 
                     b.Property<string>("Password")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Region")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.Property<string>("Username")
                         .HasColumnType("nvarchar(max)");
@@ -342,7 +357,7 @@ namespace BpmnWorkflow.Infrastructure.Migrations
                     b.Property<string>("Variables")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid>("WorkflowId")
+                    b.Property<Guid?>("WorkflowId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
@@ -657,9 +672,7 @@ namespace BpmnWorkflow.Infrastructure.Migrations
 
                     b.HasOne("BpmnWorkflow.Domain.Entities.Workflow", "Workflow")
                         .WithMany()
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("WorkflowId");
 
                     b.Navigation("StartedByUser");
 

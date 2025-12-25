@@ -29,6 +29,13 @@ namespace BpmnWorkflow.Client.Services
             try
             {
                 jwtToken = handler.ReadJwtToken(token);
+                
+                // Check if token is expired
+                if (jwtToken.ValidTo < DateTime.UtcNow)
+                {
+                    await _localStorage.RemoveItemAsync(TokenStorageKey);
+                    return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+                }
             }
             catch
             {

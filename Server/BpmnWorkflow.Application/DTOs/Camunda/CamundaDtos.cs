@@ -1,3 +1,5 @@
+using BpmnWorkflow.Domain.Entities;
+
 namespace BpmnWorkflow.Application.DTOs.Camunda;
 
 /// <summary>

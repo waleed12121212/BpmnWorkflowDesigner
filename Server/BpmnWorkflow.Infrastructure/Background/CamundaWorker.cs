@@ -32,7 +32,8 @@ namespace BpmnWorkflow.Infrastructure.Background
             {
                 try
                 {
-                    await PollAndExecuteTasks(stoppingToken);
+                    // await PollAndExecuteTasks(stoppingToken); 
+                    // Temporarily disabled to prevent log spam due to 404 errors
                 }
                 catch (Exception ex)
                 {

@@ -1,0 +1,93 @@
+[
+    {
+        "name": "REST Outbound Connector",
+        "id": "io.camunda.connectors.HttpJson.v2",
+        "protocolVersion": 1,
+        "version": 12,
+        "description": "Send a request to a REST API.",
+        "appliesTo": [
+            "bpmn:ServiceTask"
+        ],
+        "elementType": {
+            "value": "bpmn:ServiceTask"
+        },
+        "groups": [
+            {
+                "id": "authentication",
+                "label": "Authentication"
+            },
+            {
+                "id": "http-request",
+                "label": "HTTP Request"
+            }
+        ],
+        "properties": [
+            {
+                "label": "URL",
+                "type": "String",
+                "group": "http-request",
+                "binding": {
+                    "type": "zeebe:input",
+                    "name": "url"
+                },
+                "constraints": {
+                    "notEmpty": true
+                }
+            },
+            {
+                "label": "Method",
+                "type": "Dropdown",
+                "group": "http-request",
+                "choices": [
+                    {
+                        "name": "GET",
+                        "value": "GET"
+                    },
+                    {
+                        "name": "POST",
+                        "value": "POST"
+                    },
+                    {
+                        "name": "PUT",
+                        "value": "PUT"
+                    },
+                    {
+                        "name": "DELETE",
+                        "value": "DELETE"
+                    }
+                ],
+                "value": "GET",
+                "binding": {
+                    "type": "zeebe:input",
+                    "name": "method"
+                }
+            }
+        ]
+    },
+    {
+        "name": "Slack Notification",
+        "id": "slack-notification",
+        "appliesTo": [
+            "bpmn:ServiceTask"
+        ],
+        "properties": [
+            {
+                "label": "Channel",
+                "type": "String",
+                "value": "#general",
+                "binding": {
+                    "type": "zeebe:input",
+                    "name": "channel"
+                }
+            },
+            {
+                "label": "Message",
+                "type": "Text",
+                "binding": {
+                    "type": "zeebe:input",
+                    "name": "message"
+                }
+            }
+        ]
+    }
+]
